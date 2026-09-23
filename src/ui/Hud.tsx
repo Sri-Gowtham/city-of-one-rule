@@ -3,9 +3,9 @@ import { ruleById } from "../sim/rules";
 import { METRIC_KEYS } from "../sim/types";
 import { METRIC_META, clock } from "./labels";
 
-export type Tab = "city" | "people" | "businesses" | "news";
+export type Tab = "city" | "people" | "businesses" | "trends" | "news";
 
-export function TopBar({ sim }: { sim: Sim }) {
+export function TopBar({ sim, muted, onMute }: { sim: Sim; muted: boolean; onMute: () => void }) {
   const rule = sim.activeRule ? ruleById(sim.activeRule) : null;
   const running = sim.phase === "running";
   return (
@@ -24,6 +24,9 @@ export function TopBar({ sim }: { sim: Sim }) {
         <span className="rule-chip-label">ACTIVE RULE</span>
         <span className="rule-chip-title">{rule ? rule.title : "None yet"}</span>
       </div>
+      <button className="icon-btn mute" title={muted ? "Unmute" : "Mute"} onClick={onMute}>
+        {muted ? "🔇" : "🔊"}
+      </button>
       <div className="metrics">
         {METRIC_KEYS.map((k) => {
           const v = sim.metrics[k];
@@ -75,6 +78,7 @@ export function BottomBar({ sim, tab, setTab, speed, setSpeed, onChooseRule, onS
     ["city", "City"],
     ["people", "People"],
     ["businesses", "Businesses"],
+    ["trends", "Trends"],
     ["news", "News"],
   ];
   return (

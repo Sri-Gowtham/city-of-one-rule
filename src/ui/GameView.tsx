@@ -10,6 +10,15 @@ import { EventFeed, LensPanel } from "./Lens";
 import { Newspaper, RuleDraft, SocietyReport } from "./Modals";
 import { BusinessesPanel, NewsPanel, PeoplePanel } from "./Panels";
 import { useSimTick } from "./useSim";
+import { TrendsPanel } from "./Trends";
+import { isMuted, play, setHumForHour, setMuted } from "./audio";
+import type { Lens } from "../render/renderer";
+
+const TIPS = [
+  "Your rule is live. Watch the feed on the left: it reports what citizens actually do.",
+  "Click any person to follow them. Their story shows who they copied and who copied them.",
+  "Use the map lenses (top-left) to see mood, safety and greenery by neighborhood. The day ends with the evening paper.",
+];
 
 export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }) {
   useSimTick(sim);
@@ -24,6 +33,46 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
   const [reportOpen, setReportOpen] = useState(true);
   const [archived, setArchived] = useState<FrontPage | null>(null);
   const phase = sim.phase;
+  const [lens, setLens] = useState<Lens>("none");
+  const [muted, setMutedState] = useState(isMuted());
+  const [tip, setTip] = useState(() => {
+    try {
+      return localStorage.getItem("cor-tips-done") ? -1 : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const seenEvent = useRef(0);
+  renderer.lens = lens;
+
+  useEffect(() => {
+    setHumForHour(sim.hour, sim.phase === "running");
+    const fresh = sim.events.filter((e) => e.id > seenEvent.current);
+    if (fresh.length) seenEvent.current = fresh[fresh.length - 1].id;
+    if (fresh.length > 6 || speed > 4) return;
+    const kinds = new Set(fresh.map((e) => e.kind));
+    if (kinds.has("emergent") || kinds.has("combo")) play("emergent");
+    else if (kinds.has("protest")) play("protest");
+    else if (kinds.has("crime")) play("crime");
+    else if (kinds.has("opening")) play("opening");
+    else if (kinds.has("help") || kinds.has("chain")) play("help");
+  });
+
+  useEffect(() => {
+    if (phase === "newspaper") play("paper");
+  }, [phase]);
+
+  const closeTip = () => {
+    const next = tip + 1;
+    if (next >= TIPS.length) {
+      setTip(-1);
+      try {
+        localStorage.setItem("cor-tips-done", "1");
+      } catch {
+        /* storage unavailable */
+      }
+    } else setTip(next);
+  };
 
   useEffect(() => {
     sim.watchId = selected?.type === "citizen" ? selected.id : null;
@@ -58,6 +107,7 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
   };
   const choose = (id: RuleId) => {
     sim.startEra(id);
+    play("rule");
     setTab("city");
     setSpeed((s) => (s === 0 ? 1 : s));
   };
@@ -65,7 +115,14 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
 
   return (
     <div className="game">
-      <TopBar sim={sim} />
+      <TopBar
+        sim={sim}
+        muted={muted}
+        onMute={() => {
+          setMuted(!muted);
+          setMutedState(!muted);
+        }}
+      />
       <div className="stage">
         <CityCanvas
           sim={sim}
@@ -81,6 +138,24 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
           <>
             <EventFeed sim={sim} onSelect={selectCitizen} />
             <LensPanel sim={sim} selected={selected} follow={follow} setFollow={setFollow} onSelect={(p) => setSelected(p)} />
+            <div className="lens-switch">
+              {(["none", "mood", "safety", "green"] as Lens[]).map((l) => (
+                <button key={l} className={lens === l ? "on" : ""} onClick={() => setLens(l)}>
+                  {l === "none" ? "Map" : l === "mood" ? "😊 Mood" : l === "safety" ? "🛡️ Safety" : "🌳 Greenery"}
+                </button>
+              ))}
+            </div>
+            {tip >= 0 && phase === "running" && sim.era === 1 && (
+              <div className="coach">
+                <div className="coach-step">
+                  TIP {tip + 1} / {TIPS.length}
+                </div>
+                <p>{TIPS[tip]}</p>
+                <button className="cta" onClick={closeTip}>
+                  {tip + 1 < TIPS.length ? "Next" : "Got it"}
+                </button>
+              </div>
+            )}
             <div className="hint">Drag to pan · scroll to zoom · click a person to follow them · space to pause</div>
           </>
         )}
@@ -97,6 +172,7 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
             }}
           />
         )}
+        {tab === "trends" && <TrendsPanel sim={sim} />}
         {tab === "news" && <NewsPanel sim={sim} onOpen={setArchived} />}
 
         {phase === "choosing" && draftOpen && <RuleDraft sim={sim} onChoose={choose} onPeek={() => setDraftOpen(false)} />}

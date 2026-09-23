@@ -261,6 +261,7 @@ export class Sim {
   snapshots: EraSnapshot[] = [];
   dev = { orgs: 0, businessesCreated: 0, treesPlanted: 0, closed: 0, labels: [] as string[] };
   watchId: number | null = null;
+  samples: { era: number; hour: number; m: Record<MetricKey, number> }[] = [];
 
   private base = { econ: [] as number[], crime: [] as number[], argue: [] as number[], pollution: [] as number[], trees: 0, litter: 0 };
   private nextTick = DAY_START;
@@ -714,6 +715,7 @@ export class Sim {
       this.base.pollution[t] = this.roll.pollution ?? 0;
     } else {
       this.computeMetrics(t, false);
+      if (!this.ambient && t % 6 === 0) this.samples.push({ era: this.era, hour: this.hour, m: { ...this.metrics } });
       if (!this.ambient) this.checkEmergent();
     }
   }

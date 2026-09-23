@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Sim } from "../sim/engine";
 import { CityRenderer } from "../render/renderer";
 import { CityCanvas } from "./CityCanvas";
+import { play, startAudio } from "./audio";
 
 export function TitleScreen({ onStart }: { onStart: (eras: number) => void }) {
   const ambient = useMemo(() => {
@@ -54,7 +55,11 @@ export function TitleScreen({ onStart }: { onStart: (eras: number) => void }) {
               Full term · 10 days
             </button>
           </div>
-          <button className="cta big" onClick={() => onStart(eras)}>
+          <button className="cta big" onClick={() => {
+              startAudio();
+              play("rule");
+              onStart(eras);
+            }}>
             TAKE OFFICE
           </button>
         </div>

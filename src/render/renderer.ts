@@ -8,6 +8,8 @@ import { TH, TW, iso, line, pointInPoly, poly } from "./draw";
 import type { Pt } from "./draw";
 import { renderGround } from "./ground";
 
+export type Lens = "none" | "mood" | "safety" | "green";
+
 export type Pick = { type: "citizen"; id: number } | { type: "building"; id: number } | null;
 
 interface Car {
@@ -50,6 +52,7 @@ export class CityRenderer {
   cam = { x: 0, y: 0, zoom: 0.5 };
   followId: number | null = null;
   hover: Pick = null;
+  lens: Lens = "none";
   private w = 0;
   private h = 0;
   private dpr = 1;
@@ -206,6 +209,7 @@ export class CityRenderer {
     list.sort((a, b) => a.d - b.d);
     for (const it of list) it.f();
 
+    if (this.lens !== "none") this.drawLens(ctx, sim);
     this.updateParticles(ctx, bc, realDt, speed);
     this.drawOverlays(ctx, sim, selected);
 
@@ -229,6 +233,50 @@ export class CityRenderer {
       if (night > 0.08) this.drawLights(ctx, sim, bc, night);
     }
     this.drawLabels(ctx, sim);
+  }
+
+  private drawLens(ctx: CanvasRenderingContext2D, sim: Sim) {
+    const blockOf = (x: number, y: number) => {
+      const bx = Math.floor((x - 1.5) / 6);
+      const by = Math.floor((y - 1.5) / 6);
+      return bx >= 0 && by >= 0 && bx < 5 && by < 5 ? by * 5 + bx : -1;
+    };
+    const sum = new Array(25).fill(0);
+    const n = new Array(25).fill(0);
+    if (this.lens === "mood") {
+      for (const c of sim.citizens) {
+        const h = sim.world.buildings[c.homeId];
+        const b = blockOf(h.x, h.y);
+        if (b >= 0) {
+          sum[b] += c.mood;
+          n[b]++;
+        }
+      }
+    } else if (this.lens === "safety") {
+      for (const e of sim.events) {
+        if ((e.kind === "crime" || e.kind === "protest") && e.era >= sim.era - 1) {
+          const b = blockOf(e.x, e.y);
+          if (b >= 0) sum[b] += e.kind === "crime" ? 1 : 0.5;
+        }
+      }
+    } else {
+      for (const t of sim.world.trees) {
+        const b = blockOf(t.x, t.y);
+        if (b >= 0) sum[b]++;
+      }
+    }
+    for (let b = 0; b < 25; b++) {
+      let v: number;
+      if (this.lens === "mood") {
+        if (!n[b]) continue;
+        v = Math.max(0, Math.min(1, (sum[b] / n[b] - 35) / 45));
+      } else if (this.lens === "safety") v = Math.max(0, 1 - sum[b] / 4);
+      else v = Math.min(1, sum[b] / 12);
+      const hue = v * 120;
+      const x0 = 2 + (b % 5) * 6 - 0.5;
+      const y0 = 2 + Math.floor(b / 5) * 6 - 0.5;
+      poly(ctx, [iso(x0, y0), iso(x0 + 6, y0), iso(x0 + 6, y0 + 6), iso(x0, y0 + 6)], `hsla(${hue},80%,50%,0.38)`, "rgba(255,255,255,0.25)", 1);
+    }
   }
 
   private drawLabels(ctx: CanvasRenderingContext2D, sim: Sim) {

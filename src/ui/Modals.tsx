@@ -3,6 +3,7 @@ import { buildReport } from "../sim/report";
 import { RULES, ruleById } from "../sim/rules";
 import { METRIC_KEYS } from "../sim/types";
 import type { FrontPage, RuleId } from "../sim/types";
+import { useState } from "react";
 import { METRIC_META } from "./labels";
 
 export function RuleDraft({ sim, onChoose, onPeek }: { sim: Sim; onChoose: (id: RuleId) => void; onPeek: () => void }) {
@@ -132,6 +133,17 @@ export function Newspaper({ paper, onClose, cta }: { paper: FrontPage; onClose: 
 export function SocietyReport({ sim, onRestart, onExplore }: { sim: Sim; onRestart: () => void; onExplore: () => void }) {
   const r = buildReport(sim);
   const start = sim.snapshots[0].metrics;
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    const text = [
+      "CITY OF ONE RULE — my city became:",
+      r.traits.join(" · "),
+      `Population ${r.population.toLocaleString()} | ` + METRIC_KEYS.map((k) => `${METRIC_META[k].label} ${Math.round(r.metrics[k])}`).join(", "),
+      "Rules: " + r.timeline.map((t) => `D${t.era} ${t.title}`).join(" → "),
+      "Developments: " + r.developments.slice(0, 5).join("; "),
+    ].join("\n");
+    void navigator.clipboard?.writeText(text).then(() => setCopied(true));
+  };
   return (
     <div className="modal-wrap report-wrap">
       <div className="report">
@@ -194,6 +206,9 @@ export function SocietyReport({ sim, onRestart, onExplore }: { sim: Sim; onResta
         <div className="report-actions">
           <button className="cta" onClick={onRestart}>
             GOVERN A NEW CITY
+          </button>
+          <button className="ghost" onClick={copy}>
+            {copied ? "Copied ✓" : "Copy summary"}
           </button>
           <button className="ghost" onClick={onExplore}>
             Keep exploring this city

@@ -1,0 +1,245 @@
+import type { CultureKey, Params, RuleDef, RuleId } from "./types";
+
+export const DEFAULT_PARAMS: Params = {
+  money: true,
+  workHours: 8,
+  ubi: 0,
+  ads: true,
+  internet: true,
+  wasteTax: false,
+  sharedProperty: false,
+  voting: false,
+  rewards: false,
+  mandatoryHelp: false,
+  mandatoryTree: false,
+  outsideHour: false,
+  skillQuota: false,
+  noLying: false,
+  mustAnswer: false,
+};
+
+export const RULES: RuleDef[] = [
+  {
+    id: "no-lying",
+    num: 1,
+    title: "Nobody May Lie",
+    flavor: "Every statement, public or private, must be true.",
+    pressures: ["Honesty", "Advertising", "Politics"],
+    params: { noLying: true },
+    push: { honesty: 14 },
+  },
+  {
+    id: "help-stranger",
+    num: 2,
+    title: "Everyone Must Help One Stranger Each Day",
+    flavor: "One act of help, every day, for someone you don't know.",
+    pressures: ["Kindness", "Obligation"],
+    params: { mandatoryHelp: true },
+    push: { generosity: 10, community: 5 },
+  },
+  {
+    id: "no-money",
+    num: 3,
+    title: "No Money",
+    flavor: "Currency is abolished. Exchange however you can.",
+    pressures: ["Commerce", "Reputation"],
+    params: { money: false },
+    push: { reputation: 12, equality: 6 },
+    unlock: { key: "reputation", min: 56, hint: "a city where reputation starts to matter" },
+  },
+  {
+    id: "four-hour-day",
+    num: 4,
+    title: "Everyone Works Only Four Hours",
+    flavor: "The workday ends at lunch.",
+    pressures: ["Labor", "Free time"],
+    params: { workHours: 4 },
+    push: { leisure: 14 },
+  },
+  {
+    id: "basic-income",
+    num: 5,
+    title: "Everyone Gets the Same Basic Income",
+    flavor: "An equal payment lands in every account each morning.",
+    pressures: ["Income", "Work incentives"],
+    params: { ubi: 14 },
+    push: { equality: 10 },
+  },
+  {
+    id: "plant-tree",
+    num: 6,
+    title: "Everyone Must Plant One Tree",
+    flavor: "Each citizen plants a tree before the day is out.",
+    pressures: ["Environment", "Public space"],
+    params: { mandatoryTree: true },
+    push: { environment: 12 },
+  },
+  {
+    id: "no-internet",
+    num: 7,
+    title: "Nobody Can Use the Internet",
+    flavor: "The networks go dark. Talk face to face.",
+    pressures: ["Digital life", "Local ties"],
+    params: { internet: false },
+    push: { localism: 14, community: 4 },
+  },
+  {
+    id: "learn-skill",
+    num: 8,
+    title: "Everyone Must Learn One New Skill",
+    flavor: "Every citizen learns something new before sundown.",
+    pressures: ["Education", "Innovation"],
+    params: { skillQuota: true },
+    push: { learning: 12 },
+  },
+  {
+    id: "no-private-property",
+    num: 9,
+    title: "No Private Property",
+    flavor: "Homes and goods become shared. Nothing is 'mine'.",
+    pressures: ["Ownership", "Housing"],
+    params: { sharedProperty: true },
+    push: { equality: 12, community: 4 },
+    unlock: { key: "equality", min: 58, hint: "a city that grows more equal" },
+  },
+  {
+    id: "tell-opinion",
+    num: 10,
+    title: "Everyone Must Tell Their Opinion When Asked",
+    flavor: "If someone asks what you think, you must answer.",
+    pressures: ["Transparency", "Privacy"],
+    params: { mustAnswer: true },
+    push: { honesty: 8, participation: 6 },
+    unlock: { key: "honesty", min: 56, hint: "a city that values honesty" },
+  },
+  {
+    id: "no-advertising",
+    num: 11,
+    title: "No Advertising",
+    flavor: "Billboards come down. Commercials go silent.",
+    pressures: ["Marketing", "Word of mouth"],
+    params: { ads: false },
+    push: { reputation: 8, localism: 6 },
+  },
+  {
+    id: "hour-outside",
+    num: 12,
+    title: "Everyone Must Spend One Hour Outside",
+    flavor: "At least an hour a day in public space.",
+    pressures: ["Public space", "Health"],
+    params: { outsideHour: true },
+    push: { community: 8, leisure: 4 },
+  },
+  {
+    id: "waste-tax",
+    num: 13,
+    title: "Waste Is Taxed Heavily",
+    flavor: "Every bag of trash comes with a steep bill.",
+    pressures: ["Waste", "Product design"],
+    params: { wasteTax: true },
+    push: { environment: 10 },
+    unlock: { key: "environment", min: 56, hint: "a city that cares about its environment" },
+  },
+  {
+    id: "daily-vote",
+    num: 14,
+    title: "Every Citizen Votes on Local Decisions Daily",
+    flavor: "The city asks, and everyone decides.",
+    pressures: ["Participation", "Attention"],
+    params: { voting: true },
+    push: { participation: 14 },
+    unlock: { key: "community", min: 58, hint: "a strong community culture" },
+  },
+  {
+    id: "reward-citizen",
+    num: 15,
+    title: "Every Citizen May Reward One Other Citizen per Day",
+    flavor: "Give one symbolic reputation point to someone who earned it.",
+    pressures: ["Recognition", "Status"],
+    params: { rewards: true },
+    push: { reputation: 12, generosity: 4 },
+    unlock: { key: "generosity", min: 56, hint: "a generous city" },
+  },
+];
+
+export const ruleById = (id: RuleId): RuleDef => RULES.find((r) => r.id === id)!;
+
+export function paramsFor(rule: RuleId | null): Params {
+  return rule ? { ...DEFAULT_PARAMS, ...ruleById(rule).params } : { ...DEFAULT_PARAMS };
+}
+
+export interface Combo {
+  id: string;
+  rules: [RuleId, RuleId];
+  headline: string;
+  body: string;
+  label: string;
+  push: Partial<Record<CultureKey, number>>;
+}
+
+export const COMBOS: Combo[] = [
+  {
+    id: "reputation-marketing",
+    rules: ["no-advertising", "reward-citizen"],
+    headline: "REPUTATION BECOMES THE NEW MARKETING",
+    body: "With ads gone and rewards flowing, businesses now court the city's most-rewarded residents. A recommendation from the right person is worth more than any billboard ever was.",
+    label: "Reputation became marketing",
+    push: { reputation: 10 },
+  },
+  {
+    id: "reputation-currency",
+    rules: ["no-money", "reward-citizen"],
+    headline: "REPUTATION BECOMES CURRENCY",
+    body: "Reward points are being traded for bread, repairs and favors. Without money, standing in the community is the only balance that counts.",
+    label: "Reputation became currency",
+    push: { reputation: 12, equality: -4 },
+  },
+  {
+    id: "park-life",
+    rules: ["plant-tree", "hour-outside"],
+    headline: "THE CITY MOVES OUTDOORS",
+    body: "New trees and a daily hour outside have turned the parks into the city's living room. Cafés are setting up tables under the canopy.",
+    label: "Parks became the center of public life",
+    push: { community: 8, environment: 6 },
+  },
+  {
+    id: "radical-sincerity",
+    rules: ["no-lying", "help-stranger"],
+    headline: "RADICAL SINCERITY: HELP YOU CAN TRUST",
+    body: "When nobody may lie, a favor can't be faked. Residents say help feels different when you know it's meant.",
+    label: "Sincere help culture formed",
+    push: { honesty: 6, generosity: 6 },
+  },
+  {
+    id: "town-hall",
+    rules: ["no-internet", "daily-vote"],
+    headline: "THE TOWN HALL IS BACK",
+    body: "With no screens to vote on, residents are gathering in person to decide. The city hall steps have become the city's forum.",
+    label: "In-person democracy revived",
+    push: { participation: 10, localism: 6 },
+  },
+  {
+    id: "academies",
+    rules: ["four-hour-day", "learn-skill"],
+    headline: "AFTERNOONS BECOME NEIGHBORHOOD ACADEMIES",
+    body: "Short workdays plus a learning quota have filled the afternoons with classes taught by neighbors, for neighbors.",
+    label: "Neighborhood academies emerged",
+    push: { learning: 10, community: 4 },
+  },
+  {
+    id: "commons",
+    rules: ["no-private-property", "basic-income"],
+    headline: "A CITY OF COMMONS",
+    body: "Shared homes and equal incomes are blurring the line between 'mine' and 'ours'. Some thrive in it; others quietly miss having a door they can lock.",
+    label: "A commons economy emerged",
+    push: { equality: 10, community: 4 },
+  },
+  {
+    id: "repair-culture",
+    rules: ["waste-tax", "learn-skill"],
+    headline: "EVERYONE'S A FIXER NOW",
+    body: "Taxed waste and a skill a day have produced a city of tinkerers. Broken things are becoming lessons instead of trash.",
+    label: "Repair culture took hold",
+    push: { environment: 6, learning: 6 },
+  },
+];

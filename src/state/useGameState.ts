@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { rules } from "../data/rules";
-import { initialCulture, pickRuleChoices, runEra } from "../engine/simulation";
-import type { EraRecord, RuleDef } from "../engine/types";
+import { initialBusinessState, initialCulture, pickRuleChoices, runEra } from "../engine/simulation";
+import type { BusinessState, EraRecord, RuleDef } from "../engine/types";
 import { initialMetrics } from "../data/metrics";
 
 const TOTAL_ERAS = 5;
@@ -9,6 +9,7 @@ const TOTAL_ERAS = 5;
 export function useGameState() {
   const [metrics, setMetrics] = useState(initialMetrics);
   const [culture, setCulture] = useState(initialCulture);
+  const [businessStates, setBusinessStates] = useState<BusinessState[]>(initialBusinessState);
   const [era, setEra] = useState(1);
   const [history, setHistory] = useState<EraRecord[]>([]);
   const [latestRecord, setLatestRecord] = useState<EraRecord | null>(null);
@@ -22,9 +23,10 @@ export function useGameState() {
   );
 
   function chooseRule(rule: RuleDef) {
-    const result = runEra(era, rule, metrics, culture);
+    const result = runEra(era, rule, metrics, culture, businessStates);
     setMetrics(result.metrics);
     setCulture(result.culture);
+    setBusinessStates(result.businesses);
     setLatestRecord(result.record);
     setHistory((prev) => [...prev, result.record]);
 
@@ -38,6 +40,7 @@ export function useGameState() {
   function reset() {
     setMetrics(initialMetrics);
     setCulture(initialCulture);
+    setBusinessStates(initialBusinessState());
     setEra(1);
     setHistory([]);
     setLatestRecord(null);
@@ -47,6 +50,7 @@ export function useGameState() {
   return {
     metrics,
     culture,
+    businessStates,
     era,
     totalEras: TOTAL_ERAS,
     choices,

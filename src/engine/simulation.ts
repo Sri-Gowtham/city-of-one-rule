@@ -1,5 +1,7 @@
 import { citizens } from "../data/citizens";
+import { businesses } from "../data/businesses";
 import type {
+  BusinessState,
   CultureKey,
   CultureState,
   EraRecord,
@@ -7,6 +9,10 @@ import type {
   MetricsState,
   RuleDef,
 } from "./types";
+
+export function initialBusinessState(): BusinessState[] {
+  return businesses.map((b) => ({ id: b.id, demand: 60, reputation: 60 }));
+}
 
 export const initialCulture: CultureState = {
   trust: 50,
@@ -92,8 +98,8 @@ export function generateHeadline(deltas: Partial<Record<MetricKey, number>>) {
   const key = biggestChange(deltas);
   if (!key) return "THE CITY HOLDS STEADY";
   const value = deltas[key] ?? 0;
-  const [up, down] = headlineTemplates[key];
-  return value >= 0 ? up : down;
+  const template = headlineTemplates[key];
+  return value >= 0 ? template[0] : template[1];
 }
 
 export function generateReaction(rule: RuleDef) {
@@ -117,18 +123,48 @@ export function generateReaction(rule: RuleDef) {
   return `${citizen.name} (${citizen.occupation}) ${verbs[tag]} "${rule.name}".`;
 }
 
+export function applyRuleToBusinesses(rule: RuleDef, businessStates: BusinessState[]): BusinessState[] {
+  return businessStates.map((state) => {
+    const def = businesses.find((b) => b.id === state.id);
+    if (!def) return state;
+    const matches = def.tags.some((t) => rule.tags.includes(t));
+    if (!matches) {
+      return {
+        ...state,
+        demand: clamp(state.demand + (60 - state.demand) * 0.05),
+        reputation: clamp(state.reputation + (60 - state.reputation) * 0.05),
+      };
+    }
+    const economyEffect = rule.metricEffects.economy ?? 0;
+    const trustEffect = rule.metricEffects.trust ?? 0;
+    return {
+      ...state,
+      demand: clamp(state.demand + economyEffect + randomVariation()),
+      reputation: clamp(state.reputation + trustEffect + randomVariation()),
+    };
+  });
+}
+
 export function runEra(
   era: number,
   rule: RuleDef,
   metrics: MetricsState,
-  culture: CultureState
-): { metrics: MetricsState; culture: CultureState; record: EraRecord } {
+  culture: CultureState,
+  businessStates: BusinessState[]
+): {
+  metrics: MetricsState;
+  culture: CultureState;
+  businesses: BusinessState[];
+  record: EraRecord;
+} {
   const result = applyRule(rule, metrics, culture);
+  const nextBusinesses = applyRuleToBusinesses(rule, businessStates);
   const headline = generateHeadline(result.deltas);
   const reaction = generateReaction(rule);
   return {
     metrics: result.metrics,
     culture: result.culture,
+    businesses: nextBusinesses,
     record: {
       era,
       ruleId: rule.id,

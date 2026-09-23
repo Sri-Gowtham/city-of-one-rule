@@ -30,6 +30,19 @@ export interface CitizenArchetype {
   traits: string[];
 }
 
+export interface BusinessDef {
+  id: string;
+  name: string;
+  type: string;
+  tags: string[];
+}
+
+export interface BusinessState {
+  id: string;
+  demand: number;
+  reputation: number;
+}
+
 export type CultureState = Record<CultureKey, number>;
 export type MetricsState = Record<MetricKey, number>;
 

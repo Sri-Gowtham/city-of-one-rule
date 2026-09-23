@@ -1,0 +1,56 @@
+.people-panel {
+  padding: 24px;
+  overflow-y: auto;
+  height: 100%;
+  color: #f4f4f4;
+}
+
+.people-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9aa4b8;
+}
+
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.people-card {
+  background: #1c2230;
+  border: 1px solid #2a3040;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.people-card-name {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.people-card-occupation {
+  font-size: 12px;
+  color: #9aa4b8;
+}
+
+.people-card-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.people-card-trait {
+  font-size: 10px;
+  background: #29334a;
+  color: #cfd6e4;
+  border-radius: 4px;
+  padding: 2px 6px;
+  text-transform: capitalize;
+}

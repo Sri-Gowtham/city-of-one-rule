@@ -1,0 +1,48 @@
+.businesses-panel {
+  padding: 24px;
+  overflow-y: auto;
+  height: 100%;
+  color: #f4f4f4;
+}
+
+.businesses-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9aa4b8;
+}
+
+.businesses-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.business-card {
+  background: #1c2230;
+  border: 1px solid #2a3040;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.business-card-name {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.business-card-type {
+  font-size: 12px;
+  color: #9aa4b8;
+}
+
+.business-card-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #ffd76a;
+  margin-top: 6px;
+}

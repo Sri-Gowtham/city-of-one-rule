@@ -1,5 +1,5 @@
 import { citizens } from "../data/citizens";
-import {
+import type {
   CultureKey,
   CultureState,
   EraRecord,

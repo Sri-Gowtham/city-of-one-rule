@@ -1,4 +1,4 @@
-import { CitizenArchetype } from "../engine/types";
+import type { CitizenArchetype } from "../engine/types";
 
 const names: [string, string, string[]][] = [
   ["Maya", "Teacher", ["community", "generosity"]],

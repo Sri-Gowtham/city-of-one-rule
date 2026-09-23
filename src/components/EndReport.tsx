@@ -1,4 +1,4 @@
-import { CultureState, EraRecord, MetricsState } from "../engine/types";
+import type { CultureState, EraRecord, MetricsState } from "../engine/types";
 import { metricIcons } from "../data/metrics";
 import "./EndReport.css";
 

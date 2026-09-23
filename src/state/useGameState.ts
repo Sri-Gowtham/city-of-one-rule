@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { rules } from "../data/rules";
 import { initialCulture, pickRuleChoices, runEra } from "../engine/simulation";
-import { EraRecord, RuleDef } from "../engine/types";
+import type { EraRecord, RuleDef } from "../engine/types";
 import { initialMetrics } from "../data/metrics";
 
 const TOTAL_ERAS = 5;

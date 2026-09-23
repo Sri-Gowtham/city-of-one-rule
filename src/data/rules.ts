@@ -1,4 +1,4 @@
-import { RuleDef } from "../engine/types";
+import type { RuleDef } from "../engine/types";
 
 export const rules: RuleDef[] = [
   {

@@ -1,4 +1,5 @@
-import { CityMetrics, metricIcons } from "../data/metrics";
+import type { CityMetrics } from "../data/metrics";
+import { metricIcons } from "../data/metrics";
 import "./MetricsBar.css";
 
 interface Props {

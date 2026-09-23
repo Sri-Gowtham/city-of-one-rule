@@ -1,4 +1,4 @@
-import { EraRecord } from "../engine/types";
+import type { EraRecord } from "../engine/types";
 import "./NewsFeed.css";
 
 interface Props {

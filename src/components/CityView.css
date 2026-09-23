@@ -1,0 +1,47 @@
+.city-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: url("/assets/backgrounds/01_MASTER_BACKGROUND_V1.png") center / cover no-repeat;
+}
+
+.city-grid {
+  position: relative;
+  width: 1600px;
+  height: 900px;
+  margin: 40px auto;
+}
+
+.city-building {
+  position: absolute;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.city-building:hover {
+  transform: translateY(-4px) scale(1.04);
+  z-index: 10;
+}
+
+.city-building img {
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.4));
+}
+
+.city-building-label {
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  white-space: nowrap;
+}

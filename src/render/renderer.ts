@@ -1,6 +1,6 @@
 import type { Sim } from "../sim/engine";
 import type { Building, Citizen, Prop, Tree } from "../sim/types";
-import { DISTRICT_NAMES, ROADS, S, idx } from "../sim/world";
+import { BLOCKS, DISTRICT_NAMES, LAST_ROAD, ROADS, S, idx } from "../sim/world";
 import type { DistrictId } from "../sim/types";
 import { box, buildingHull, drawBuilding } from "./buildings";
 import type { BuildCtx } from "./buildings";
@@ -78,7 +78,7 @@ export class CityRenderer {
   fit() {
     const mapW = S * TW;
     const mapH = S * TH + 140;
-    const z = Math.min(this.w / mapW, this.h / mapH) * 1.08;
+    const z = Math.min(this.w / mapW, this.h / mapH) * 0.98;
     this.cam.zoom = Math.max(0.3, Math.min(2.4, z));
     this.cam.x = this.w / 2;
     this.cam.y = (this.h - S * TH * this.cam.zoom) / 2 + 70 * this.cam.zoom;
@@ -239,10 +239,10 @@ export class CityRenderer {
     const blockOf = (x: number, y: number) => {
       const bx = Math.floor((x - 1.5) / 6);
       const by = Math.floor((y - 1.5) / 6);
-      return bx >= 0 && by >= 0 && bx < 5 && by < 5 ? by * 5 + bx : -1;
+      return bx >= 0 && by >= 0 && bx < BLOCKS && by < BLOCKS ? by * BLOCKS + bx : -1;
     };
-    const sum = new Array(25).fill(0);
-    const n = new Array(25).fill(0);
+    const sum = new Array(BLOCKS * BLOCKS).fill(0);
+    const n = new Array(BLOCKS * BLOCKS).fill(0);
     if (this.lens === "mood") {
       for (const c of sim.citizens) {
         const h = sim.world.buildings[c.homeId];
@@ -265,7 +265,7 @@ export class CityRenderer {
         if (b >= 0) sum[b]++;
       }
     }
-    for (let b = 0; b < 25; b++) {
+    for (let b = 0; b < BLOCKS * BLOCKS; b++) {
       let v: number;
       if (this.lens === "mood") {
         if (!n[b]) continue;
@@ -273,8 +273,8 @@ export class CityRenderer {
       } else if (this.lens === "safety") v = Math.max(0, 1 - sum[b] / 4);
       else v = Math.min(1, sum[b] / 12);
       const hue = v * 120;
-      const x0 = 2 + (b % 5) * 6 - 0.5;
-      const y0 = 2 + Math.floor(b / 5) * 6 - 0.5;
+      const x0 = 2 + (b % BLOCKS) * 6 - 0.5;
+      const y0 = 2 + Math.floor(b / BLOCKS) * 6 - 0.5;
       poly(ctx, [iso(x0, y0), iso(x0 + 6, y0), iso(x0 + 6, y0 + 6), iso(x0, y0 + 6)], `hsla(${hue},80%,50%,0.38)`, "rgba(255,255,255,0.25)", 1);
     }
   }
@@ -282,8 +282,8 @@ export class CityRenderer {
   private drawLabels(ctx: CanvasRenderingContext2D, sim: Sim) {
     if (!this.labels) {
       const groups = new Map<DistrictId, [number, number][]>();
-      for (let by = 0; by < 5; by++) {
-        for (let bx = 0; bx < 5; bx++) {
+      for (let by = 0; by < BLOCKS; by++) {
+        for (let bx = 0; bx < BLOCKS; bx++) {
           const cx = 4.5 + bx * 6;
           const cy = 4.5 + by * 6;
           const d = sim.world.district[idx(Math.floor(cx), Math.floor(cy))];
@@ -574,13 +574,13 @@ export class CityRenderer {
   private updateCars(sim: Sim, dt: number, speed: number) {
     const h = sim.hour;
     const busy = h > 7 && h < 21;
-    const target = Math.round((busy ? 8 + sim.metrics.economy / 6 : 4) * (sim.phase === "running" ? 1 : 0.6));
+    const target = Math.round((busy ? 16 + sim.metrics.economy / 4 : 7) * (sim.phase === "running" ? 1 : 0.6));
     while (this.cars.length < target) {
       const axis = (Math.random() < 0.5 ? 0 : 1) as 0 | 1;
       this.cars.push({
         axis,
         line: ROADS[Math.floor(Math.random() * ROADS.length)],
-        pos: 1.5 + Math.random() * 29,
+        pos: 1.5 + Math.random() * (LAST_ROAD - 2),
         dir: Math.random() < 0.5 ? 1 : -1,
         speed: 1.6 + Math.random() * 1.2,
         color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
@@ -604,9 +604,9 @@ export class CityRenderer {
           break;
         }
       }
-      if (car.pos < 1.5 || car.pos > 31.5) {
+      if (car.pos < 1.5 || car.pos > LAST_ROAD + 0.5) {
         car.dir = car.pos < 1.5 ? 1 : -1;
-        car.pos = Math.max(1.5, Math.min(31.5, car.pos));
+        car.pos = Math.max(1.5, Math.min(LAST_ROAD + 0.5, car.pos));
       }
     }
   }

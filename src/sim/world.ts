@@ -1,9 +1,11 @@
 import type { Rng } from "./rng";
 import type { Building, BuildingKind, DistrictId, TileKind, World } from "./types";
 
-export const S = 35;
-export const ROADS = [1, 7, 13, 19, 25, 31];
-const ORIGINS = [2, 8, 14, 20, 26];
+export const BLOCKS = 7;
+export const LAST_ROAD = 1 + BLOCKS * 6;
+export const S = LAST_ROAD + 4;
+export const ROADS = Array.from({ length: BLOCKS + 1 }, (_, i) => 1 + i * 6);
+const ORIGINS = Array.from({ length: BLOCKS }, (_, i) => 2 + i * 6);
 const DIRS: readonly [number, number][] = [
   [1, 0],
   [-1, 0],
@@ -14,12 +16,37 @@ const DIRS: readonly [number, number][] = [
 type BlockKind = DistrictId | "civic";
 
 const LAYOUT: BlockKind[][] = [
-  ["suburbs", "suburbs", "residential", "university", "university"],
-  ["suburbs", "residential", "downtown", "residential", "university"],
-  ["residential", "downtown", "civic", "downtown", "industrial"],
-  ["oldtown", "oldtown", "park", "industrial", "industrial"],
-  ["oldtown", "oldtown", "park", "industrial", "industrial"],
+  ["suburbs", "suburbs", "suburbs", "residential", "university", "university", "university"],
+  ["suburbs", "suburbs", "residential", "residential", "residential", "university", "university"],
+  ["suburbs", "residential", "downtown", "downtown", "downtown", "residential", "university"],
+  ["residential", "residential", "downtown", "civic", "downtown", "residential", "residential"],
+  ["oldtown", "oldtown", "downtown", "park", "downtown", "industrial", "industrial"],
+  ["oldtown", "oldtown", "oldtown", "park", "industrial", "industrial", "industrial"],
+  ["oldtown", "oldtown", "park", "park", "industrial", "industrial", "industrial"],
 ];
+
+const FILLER: Record<DistrictId, LotSpec[]> = {
+  downtown: [
+    { t: "big", kind: "office" },
+    { t: "big", kind: "apartment" },
+    { t: "quad", kinds: ["shop", "cafe", "restaurant", "shop"] },
+    { t: "big", kind: "office" },
+  ],
+  residential: [
+    { t: "big", kind: "apartment" },
+    { t: "quad", kinds: ["house", "house", "house", "house"] },
+    { t: "quad", kinds: ["house", "shop", "house", "house"] },
+  ],
+  suburbs: [{ t: "pair" }, { t: "pair" }, { t: "quad", kinds: ["house", "house", "house", "house"] }],
+  university: [{ t: "big", kind: "apartment" }, { t: "quad", kinds: ["cafe", "house", "house", "shop"] }, { t: "pocket" }],
+  oldtown: [
+    { t: "quad", kinds: ["cafe", "shop", "restaurant", "shop"] },
+    { t: "quad", kinds: ["house", "house", "house", "house"] },
+    { t: "big", kind: "apartment" },
+  ],
+  industrial: [{ t: "big", kind: "warehouse" }, { t: "yard" }, { t: "big", kind: "apartment" }, { t: "big", kind: "factory" }],
+  park: [],
+};
 
 export const DISTRICT_NAMES: Record<DistrictId, string> = {
   downtown: "Downtown",
@@ -54,11 +81,16 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
     { t: "big", kind: "apartment", name: "Skyline Residences" },
     { t: "quad", kinds: ["shop", "cafe", "restaurant", "shop"] },
     { t: "big", kind: "office", name: "Civic Tower" },
+    { t: "big", kind: "office", name: "Summit Plaza" },
+    { t: "big", kind: "techco", name: "Nimbus Systems" },
+    { t: "big", kind: "cinema", name: "Grand Odeon" },
     { t: "big", kind: "apartment" },
     { t: "empty" },
   ],
   residential: [
     { t: "big", kind: "school", name: "Riverside School" },
+    { t: "big", kind: "school", name: "Hillcrest Academy" },
+    { t: "big", kind: "community", name: "Eastside Commons" },
     { t: "big", kind: "grocery", name: "Maple Grocer" },
     ...rep<LotSpec>(5, { t: "big", kind: "apartment" }),
     ...rep<LotSpec>(6, { t: "quad", kinds: H4 }),
@@ -102,6 +134,7 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
     { t: "big", kind: "warehouse", name: "Harbor Logistics" },
     ...rep<LotSpec>(4, { t: "big", kind: "warehouse" }),
     { t: "big", kind: "power", name: "Riverside Power" },
+    { t: "big", kind: "factory", name: "Harborline Foods" },
     ...rep<LotSpec>(3, { t: "big", kind: "apartment" }),
     { t: "quad", kinds: H4 },
     { t: "quad", kinds: H4 },
@@ -218,7 +251,7 @@ export function generateWorld(rng: Rng): World {
     }
   }
   for (const r of ROADS) {
-    for (let k = 1; k <= 31; k++) {
+    for (let k = 1; k <= LAST_ROAD; k++) {
       set(r, k, "road");
       set(k, r, "road");
     }
@@ -227,8 +260,9 @@ export function generateWorld(rng: Rng): World {
   const queues: Record<DistrictId, LotSpec[]> = {} as Record<DistrictId, LotSpec[]>;
   for (const d of Object.keys(QUEUES) as DistrictId[]) queues[d] = rng.shuffle([...QUEUES[d]]);
 
-  for (let by = 0; by < 5; by++) {
-    for (let bx = 0; bx < 5; bx++) {
+  let parks = 0;
+  for (let by = 0; by < BLOCKS; by++) {
+    for (let bx = 0; bx < BLOCKS; bx++) {
       const kind = LAYOUT[by][bx];
       const x0 = ORIGINS[bx];
       const y0 = ORIGINS[by];
@@ -241,7 +275,7 @@ export function generateWorld(rng: Rng): World {
         continue;
       }
       if (kind === "park") {
-        buildPark(world, rng, x0, y0, by === 3);
+        buildPark(world, rng, x0, y0, parks++ % 2 === 0);
         continue;
       }
       const gap: TileKind = d === "downtown" || d === "oldtown" || d === "industrial" ? "walk" : "garden";
@@ -255,7 +289,7 @@ export function generateWorld(rng: Rng): World {
         [3, 3],
       ];
       for (const [lx, ly] of corners) {
-        const spec = queues[d].shift() ?? { t: "empty" };
+        const spec = queues[d].shift() ?? (rng.chance(0.12) ? { t: "empty" as const } : rng.pick(FILLER[d]));
         fillLot(world, rng, spec, x0 + lx, y0 + ly, d);
       }
     }
@@ -274,8 +308,9 @@ export function generateWorld(rng: Rng): World {
       world.props.push({ kind: "bench", x: S - 3, y: k, variant: 1 });
     }
   }
-  world.props.push({ kind: "crane", x: 28, y: S - 3, variant: 0 });
-  world.props.push({ kind: "crane", x: S - 3, y: 28, variant: 1 });
+  world.props.push({ kind: "crane", x: S - 7, y: S - 3, variant: 0 });
+  world.props.push({ kind: "crane", x: S - 12, y: S - 3, variant: 0 });
+  world.props.push({ kind: "crane", x: S - 3, y: S - 7, variant: 1 });
 
   for (const rx of ROADS) for (const ry of ROADS) world.props.push({ kind: "streetlight", x: rx, y: ry, variant: 0 });
 

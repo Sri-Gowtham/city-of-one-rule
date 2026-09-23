@@ -11,7 +11,7 @@ import { Newspaper, RuleDraft, SocietyReport } from "./Modals";
 import { BusinessesPanel, NewsPanel, PeoplePanel } from "./Panels";
 import { useSimTick } from "./useSim";
 import { TrendsPanel } from "./Trends";
-import { isMuted, play, setHumForHour, setMuted } from "./audio";
+import { isMuted, play, playRule, setHumForHour, setMuted, setRuleAmbience } from "./audio";
 import type { Lens } from "../render/renderer";
 
 const TIPS = [
@@ -62,6 +62,12 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
     if (phase === "newspaper") play("paper");
   }, [phase]);
 
+  const activeRule = sim.activeRule;
+  useEffect(() => {
+    setRuleAmbience(phase === "running" && speed > 0 && speed <= 4 ? activeRule : null);
+    return () => setRuleAmbience(null);
+  }, [phase, speed, activeRule]);
+
   const closeTip = () => {
     const next = tip + 1;
     if (next >= TIPS.length) {
@@ -107,7 +113,7 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
   };
   const choose = (id: RuleId) => {
     sim.startEra(id);
-    play("rule");
+    playRule(id);
     setTab("city");
     setSpeed((s) => (s === 0 ? 1 : s));
   };

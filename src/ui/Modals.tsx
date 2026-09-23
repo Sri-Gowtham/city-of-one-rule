@@ -5,6 +5,7 @@ import { METRIC_KEYS } from "../sim/types";
 import type { FrontPage, RuleId } from "../sim/types";
 import { useState } from "react";
 import { METRIC_META } from "./labels";
+import { play } from "./audio";
 
 export function RuleDraft({ sim, onChoose, onPeek }: { sim: Sim; onChoose: (id: RuleId) => void; onPeek: () => void }) {
   const next = sim.era + 1;
@@ -30,7 +31,7 @@ export function RuleDraft({ sim, onChoose, onPeek }: { sim: Sim; onChoose: (id: 
             const r = ruleById(id);
             const fresh = sim.newlyUnlocked.includes(id);
             return (
-              <button key={id} className="card" onClick={() => onChoose(id)}>
+              <button key={id} className="card" onMouseEnter={() => play("click")} onClick={() => onChoose(id)}>
                 <div className="card-num">
                   RULE {String(r.num).padStart(2, "0")}
                   {fresh && <span className="badge">NEW</span>}

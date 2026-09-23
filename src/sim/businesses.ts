@@ -44,6 +44,9 @@ const CONSUMER: ReadonlySet<BizType> = new Set<BizType>([
 ]);
 
 const NAMES: Partial<Record<BizType, string[]>> = {
+  Factory: ["Copperline Works", "Bayside Canning", "Keystone Metals", "Orchard Bottling"],
+  Technology: ["Pixel Harbor", "Quanta Labs"],
+  Entertainment: ["Lantern Theater"],
   Cafe: ["Corner Café", "Bean & Bloom", "The Daily Grind", "Tea Lantern", "Moonlight Espresso", "Crumb & Cup", "Steam Street"],
   Restaurant: ["Riverside Kitchen", "Lotus Diner", "Nonna's Table", "Spice Route", "The Copper Pot"],
   "Local Shop": [
@@ -63,6 +66,8 @@ const NAMES: Partial<Record<BizType, string[]>> = {
     "Fresh Fields Produce",
   ],
 };
+
+const PREFIX = ["Maple", "Harbor", "Juniper", "Sunny", "Old Mill", "Blue Door", "Willow", "Copper", "Birch", "Saffron", "Cobalt", "Ivy", "Marigold", "Northstar", "Pebble"];
 
 const CHAINS = new Set(["City Mart", "Crestline Bank", "Starlight Cinema", "Northgate Mall"]);
 
@@ -111,7 +116,13 @@ export function generateBusinesses(rng: Rng, world: World): Business[] {
     let name = b.name;
     if (!name) {
       const pool = (NAMES[type] ?? []).filter((n) => !used.has(n));
-      name = pool.length ? rng.pick(pool) : `${type} #${out.length + 1}`;
+      if (pool.length) name = rng.pick(pool);
+      else {
+        const suffix: Partial<Record<BizType, string>> = { Cafe: "Café", Restaurant: "Kitchen", "Local Shop": "Goods", Factory: "Works", Technology: "Labs", Entertainment: "Hall" };
+        let tries = 0;
+        do name = `${rng.pick(PREFIX)} ${suffix[type] ?? type}`;
+        while (used.has(name) && ++tries < 30);
+      }
     }
     used.add(name);
     b.name = name;

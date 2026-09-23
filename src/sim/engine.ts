@@ -777,7 +777,7 @@ export class Sim {
       case "plant": {
         c.activityUntil = h + 2.5;
         const home = this.world.buildings[c.homeId];
-        const spot = findPlantSpot(this.world, rng, home.door.x, home.door.y) ?? findPlantSpot(this.world, rng, 16, 22);
+        const spot = findPlantSpot(this.world, rng, home.door.x, home.door.y) ?? findPlantSpot(this.world, rng, this.world.plazaSpot.x, this.world.plazaSpot.y + 5);
         if (!spot) {
           c.day.planted = true;
           break;
@@ -1766,7 +1766,7 @@ export class Sim {
       if (P.ubi > 0 && biz.type === "Local Shop" && biz.demand > 110) add("Launched a premium line");
 
       const essential = biz.type === "Grocery" || biz.type === "Bank";
-      biz.lowStreak = biz.demand < 35 && !essential && this.era - biz.founded >= 2 ? biz.lowStreak + 1 : 0;
+      biz.lowStreak = biz.demand < 35 && !essential && (biz.consumer || biz.baseProduction > 1.5) && this.era - biz.founded >= 2 ? biz.lowStreak + 1 : 0;
       if (biz.lowStreak >= 3 && this.closures.length < 2) {
         biz.open = false;
         this.world.buildings[biz.buildingId].closed = true;

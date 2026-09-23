@@ -1,17 +1,29 @@
+import { RuleDef } from "../engine/types";
 import "./RulePanel.css";
 
-export function RulePanel() {
+interface Props {
+  choices: RuleDef[];
+  onChoose: (rule: RuleDef) => void;
+  disabled: boolean;
+}
+
+export function RulePanel({ choices, onChoose, disabled }: Props) {
   return (
     <footer className="rule-panel">
-      <div className="rule-panel-tabs">
-        <button>CITY</button>
-        <button>PEOPLE</button>
-        <button>BUSINESSES</button>
-        <button>NEWS</button>
+      <div className="rule-panel-heading">Choose your next rule</div>
+      <div className="rule-cards">
+        {choices.map((rule) => (
+          <button
+            key={rule.id}
+            className="rule-card"
+            disabled={disabled}
+            onClick={() => onChoose(rule)}
+          >
+            <span className="rule-card-name">{rule.name}</span>
+            <span className="rule-card-desc">{rule.description}</span>
+          </button>
+        ))}
       </div>
-      <button className="rule-panel-cta" disabled>
-        CHOOSE NEXT RULE
-      </button>
     </footer>
   );
 }

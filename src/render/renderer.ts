@@ -1,6 +1,6 @@
 import type { Sim } from "../sim/engine";
 import type { Building, Citizen, Prop, Tree } from "../sim/types";
-import { BLOCKS, BRIDGE_Y, DISTRICT_NAMES, ISLAND_X0, ISLAND_X1, ISLAND_Y0, ISLAND_Y1, LAST_ROAD, ROADS, S, idx } from "../sim/world";
+import { BLOCKS, BRIDGE_Y, DISTRICT_NAMES, ISLAND_X0, ISLAND_X1, ISLAND_Y0, ISLAND_Y1, LAST_ROAD, MAIN, RAIL_Y, ROADS, S, idx } from "../sim/world";
 import type { DistrictId } from "../sim/types";
 import { box, buildSprite, buildingHeight, buildingHull, spriteKey } from "./buildings";
 import type { Sprite } from "./buildings";
@@ -241,6 +241,18 @@ export class CityRenderer {
       if (c.inside !== null || !visible(c.x, c.y)) continue;
       list.push({ d: c.x + c.y + 0.02, f: () => this.drawCitizen(ctx, c, sim, selected) });
     }
+    if (world.flags.has("rail")) {
+      const span = MAIN - 4;
+      const t = (this.time * 0.08 * Math.max(0.6, Math.min(3, speed || 0.6))) % 2;
+      const head = t < 1 ? t * span : (2 - t) * span;
+      const dir = t < 1 ? 1 : -1;
+      for (let k = 0; k < 4; k++) {
+        const cx = head - dir * k * 0.95;
+        if (cx < 0 || cx > span + 1) continue;
+        list.push({ d: cx + RAIL_Y + 0.5, f: () => this.drawRailCar(ctx, cx, k === 0) });
+      }
+    }
+    if (world.flags.has("airport")) list.push({ d: 9999, f: () => this.drawPlane(ctx, speed) });
     this.updateCars(sim, realDt, speed);
     for (const car of this.cars) {
       const [cx, cy] = this.carPos(car);
@@ -348,6 +360,49 @@ export class CityRenderer {
       ctx.textBaseline = "alphabetic";
     }
     if (hl) poly(ctx, buildingHull(b), undefined, hl === 2 ? "#ffd84a" : "rgba(255,255,255,0.85)", hl === 2 ? 3 : 1.5);
+  }
+
+  private drawRailCar(ctx: CanvasRenderingContext2D, x: number, lead: boolean) {
+    box(ctx, x - 0.42, RAIL_Y + 0.28, 0.84, 0.44, 0, 9, lead ? "#d8433b" : "#c9ced4", lead ? "#f2c14e" : "#e6e9ec");
+    const a = iso(x - 0.3, RAIL_Y + 0.72, 5);
+    const b = iso(x + 0.3, RAIL_Y + 0.72, 5);
+    line(ctx, a, b, "#2b3440", 3);
+  }
+
+  private drawPlane(ctx: CanvasRenderingContext2D, speed: number) {
+    const cycle = (this.time * 0.07 * Math.max(0.6, Math.min(3, speed || 0.6))) % 1;
+    const x0 = ISLAND_X0 - 1;
+    const x1 = ISLAND_X1 + 6;
+    const px = x0 + (x1 - x0) * cycle;
+    const climb = Math.max(0, cycle - 0.45) * 260;
+    const p = iso(px, 2.5, climb + 3);
+    if (climb > 0) {
+      const sh = iso(px, 2.5 + climb / 60, 0);
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      ctx.beginPath();
+      ctx.ellipse(sh[0], sh[1], 14, 5, 0.46, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.save();
+    ctx.translate(p[0], p[1]);
+    ctx.rotate(0.46);
+    ctx.fillStyle = "#f4f6f8";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18, 3.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#d8dde2";
+    ctx.beginPath();
+    ctx.moveTo(-3, 0);
+    ctx.lineTo(4, -14);
+    ctx.lineTo(8, -14);
+    ctx.lineTo(4, 0);
+    ctx.lineTo(8, 14);
+    ctx.lineTo(4, 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#3d6fb6";
+    ctx.fillRect(-18, -6, 4, 6);
+    ctx.restore();
   }
 
   private drawLabels(ctx: CanvasRenderingContext2D, sim: Sim) {
@@ -654,6 +709,63 @@ export class CityRenderer {
         }
         break;
       }
+      case "platform": {
+        box(ctx, p.x - 0.4, p.y + 0.78, 1.8, 0.22, 0, 3, "#b7b1a6");
+        const a = iso(p.x - 0.3, p.y + 0.95);
+        const b = iso(p.x + 1.3, p.y + 0.95);
+        line(ctx, a, [a[0], a[1] - 18], "#555", 1.5);
+        line(ctx, b, [b[0], b[1] - 18], "#555", 1.5);
+        poly(ctx, [[a[0] - 3, a[1] - 18], [b[0] + 3, b[1] - 18], [b[0] + 8, b[1] - 12], [a[0] + 2, a[1] - 12]], "#3d6fb6", "#27497a", 1);
+        ctx.font = "700 8px 'Inter', sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.fillText("🚉", (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 22);
+        break;
+      }
+      case "metro": {
+        const c = iso(p.x + 0.5, p.y + 0.5);
+        box(ctx, p.x + 0.2, p.y + 0.25, 0.6, 0.5, 0, 6, "#3a4250", "#2b3038");
+        line(ctx, [c[0] + 8, c[1]], [c[0] + 8, c[1] - 26], "#555", 1.6);
+        ctx.fillStyle = "#e0463a";
+        ctx.beginPath();
+        ctx.arc(c[0] + 8, c[1] - 30, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.font = "800 8px 'Inter', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("M", c[0] + 8, c[1] - 30);
+        ctx.textBaseline = "alphabetic";
+        break;
+      }
+      case "containers": {
+        const cols = ["#d8433b", "#3d6fb6", "#3fa06a", "#e0a82e", "#8a5a9a"];
+        for (let k = 0; k < 3; k++) box(ctx, p.x + 0.1, p.y + 0.2 + k * 0.2, 0.8, 0.18, 0, 7, cols[(p.variant + k) % cols.length]);
+        box(ctx, p.x + 0.15, p.y + 0.3, 0.7, 0.18, 7, 7, cols[(p.variant + 3) % cols.length]);
+        break;
+      }
+      case "shipyard": {
+        const a = iso(p.x, p.y + 0.5);
+        const b = iso(p.x + 6, p.y + 0.5);
+        poly(ctx, [[a[0], a[1] - 4], [b[0], b[1] - 4], [b[0] - 6, b[1] + 12], [a[0] + 6, a[1] + 12]], "#7a2e25", "#3a1a15", 1.2);
+        poly(ctx, [[a[0] + 10, a[1] - 4], [b[0] - 10, b[1] - 4], [b[0] - 14, b[1] - 16], [a[0] + 14, a[1] - 16]], "#e9e4d8");
+        const g0 = iso(p.x + 1, p.y - 0.5);
+        const g1 = iso(p.x + 5, p.y - 0.5);
+        line(ctx, g0, [g0[0], g0[1] - 70], "#e0a82e", 3);
+        line(ctx, g1, [g1[0], g1[1] - 70], "#e0a82e", 3);
+        line(ctx, [g0[0], g0[1] - 70], [g1[0], g1[1] - 70], "#e0a82e", 4);
+        const hook = g0[0] + ((g1[0] - g0[0]) * (Math.sin(this.time * 0.3) + 1)) / 2;
+        line(ctx, [hook, g0[1] - 70 + ((g1[1] - g0[1]) * (Math.sin(this.time * 0.3) + 1)) / 2], [hook, g0[1] - 30], "#333", 1);
+        break;
+      }
+      case "tower": {
+        const base = iso(p.x + 0.5, p.y + 0.5);
+        box(ctx, p.x + 0.3, p.y + 0.3, 0.4, 0.4, 0, 46, "#d9dfe4");
+        box(ctx, p.x + 0.18, p.y + 0.18, 0.64, 0.64, 46, 10, "#7fa2c0", "#e9eef2");
+        ctx.fillStyle = Math.sin(this.time * 4) > 0 ? "#ff5a4a" : "#7a2a24";
+        ctx.fillRect(base[0] - 1.5, base[1] - 64, 3, 3);
+        break;
+      }
       case "hydrant": {
         const base = iso(p.x + 0.5, p.y + 0.5);
         ctx.fillStyle = "#c0392b";
@@ -719,7 +831,7 @@ export class CityRenderer {
   private updateCars(sim: Sim, dt: number, speed: number) {
     const h = sim.hour;
     const busy = h > 7 && h < 21;
-    const target = Math.round((busy ? 16 + sim.metrics.economy / 4 : 7) * (sim.phase === "running" ? 1 : 0.6));
+    const target = Math.round((busy ? 16 + sim.metrics.economy / 4 : 7) * (sim.phase === "running" ? 1 : 0.6) * (sim.world.flags.has("metro") ? 0.8 : 1) * (sim.world.flags.has("rail") ? 0.9 : 1));
     while (this.cars.length < target) {
       const axis = (Math.random() < 0.5 ? 0 : 1) as 0 | 1;
       const line = ROADS[Math.floor(Math.random() * ROADS.length)];

@@ -187,6 +187,7 @@ const FLOORS: Record<BuildingKind, [number, number]> = {
   police: [2, 3],
   firestation: [1, 2],
   hospital: [3, 5],
+  terminal: [2, 2],
 };
 
 const WALLS: Partial<Record<BuildingKind, string[]>> = {
@@ -222,6 +223,7 @@ const BASE_COLORS: Record<BuildingKind, [string, string, string]> = {
   police: ["#c7ccd1", "#1f3a63", "#d9b44a"],
   firestation: ["#a65a45", "#3a2a24", "#f2c14e"],
   hospital: ["#eef1f3", "#7d8b96", "#e0463a"],
+  terminal: ["#dfe8ee", "#7d8b96", "#3d6fb6"],
   cityhall: ["#efe4cc", "#3d8d86", "#d9b44a"],
   kiosk: ["#f2c46b", "#d8433b", "#ffffff"],
   boutique: ["#2f2f38", "#1d1d24", "#d9b44a"],
@@ -754,4 +756,80 @@ export function buildIsland(world: World, rng: Rng, era: number): Building[] {
   world.flags.add("bridge");
   world.groundVersion++;
   return built;
+}
+
+export const RAIL_Y = 0;
+
+export function layRail(world: World, stations: DistrictId[]): { x: number; d: DistrictId }[] {
+  for (let x = 0; x <= MAIN - 3; x++) {
+    const i = idx(x, RAIL_Y);
+    if (world.treeAt.has(i)) world.treeAt.delete(i);
+    world.tiles[i] = "rail";
+  }
+  world.trees = world.trees.filter((t) => world.treeAt.has(idx(t.x, t.y)));
+  const out: { x: number; d: DistrictId }[] = [];
+  for (let bx = 0; bx < BLOCKS; bx += 2) {
+    const x = 2 + bx * 6 + 2;
+    const d = world.district[idx(x, 2)];
+    if (!stations.length || stations.includes(d) || bx === 0) {
+      world.props.push({ kind: "platform", x, y: RAIL_Y, variant: out.length });
+      out.push({ x, d });
+    }
+  }
+  world.groundVersion++;
+  world.flags.add("rail");
+  return out;
+}
+
+export function placeMetro(world: World, rng: Rng, districts: DistrictId[]): DistrictId[] {
+  const done: DistrictId[] = [];
+  for (const d of districts) {
+    const spots: { x: number; y: number }[] = [];
+    for (let i = 0; i < world.tiles.length; i++)
+      if ((world.tiles[i] === "walk" || world.tiles[i] === "plaza" || world.tiles[i] === "garden") && world.district[i] === d && world.occupied[i] === -1)
+        spots.push({ x: i % S, y: Math.floor(i / S) });
+    if (!spots.length) continue;
+    const s = rng.pick(spots);
+    world.props.push({ kind: "metro", x: s.x, y: s.y, variant: done.length });
+    done.push(d);
+  }
+  world.flags.add("metro");
+  return done;
+}
+
+export function expandPort(world: World, rng: Rng) {
+  let placed = 0;
+  for (let i = 0; i < world.tiles.length && placed < 10; i++) {
+    const x = i % S;
+    const y = Math.floor(i / S);
+    if (world.district[i] !== "industrial" || world.occupied[i] !== -1) continue;
+    if ((world.tiles[i] === "yard" || world.tiles[i] === "lot" || world.tiles[i] === "walk") && y > MAIN - 14 && rng.chance(0.5)) {
+      world.props.push({ kind: "containers", x, y, variant: rng.int(0, 3) });
+      placed++;
+    }
+  }
+  world.props.push({ kind: "crane", x: MAIN - 17, y: MAIN - 3, variant: 0 });
+  world.flags.add("port");
+  world.groundVersion++;
+}
+
+export function buildShipyard(world: World) {
+  world.props.push({ kind: "shipyard", x: MAIN - 22, y: MAIN - 1, variant: 0 });
+  world.flags.add("shipyard");
+}
+
+export function buildAirport(world: World, rng: Rng, era: number): Building {
+  for (let y = 1; y <= 5; y++)
+    for (let x = ISLAND_X0 - 1; x <= ISLAND_X1 + 1; x++) {
+      const i = idx(x, y);
+      world.district[i] = "coast";
+      world.tiles[i] = y === 1 ? "sand" : y === 2 ? "runway" : y === 3 ? "road" : "plaza";
+    }
+  for (let y = 3; y <= ISLAND_Y0 - 1; y++) world.tiles[idx(ISLAND_X0, y)] = "road";
+  const t = addBuilding(world, rng, "terminal", ISLAND_X0 + 2, 4, 3, 2, "coast", "Harbor International", era);
+  t.door = findDoor(world, t);
+  world.props.push({ kind: "tower", x: ISLAND_X1, y: 4, variant: 0 });
+  world.flags.add("airport");
+  world.groundVersion++;
+  return t;
 }

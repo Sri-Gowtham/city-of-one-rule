@@ -14,6 +14,8 @@ const FIXED: Record<string, string> = {
   lot: "#b39873",
   yard: "#a6a29a",
   bridge: "#6f747e",
+  rail: "#8a8176",
+  runway: "#4a4e56",
 };
 
 function grassColor(env: number, district: string, n: number, kind: string): string {
@@ -84,6 +86,19 @@ function decorate(ctx: CanvasRenderingContext2D, world: World, x: number, y: num
     ctx.setLineDash([6, 6]);
     line(ctx, iso(x + 0.1, y + 0.5), iso(x + 0.9, y + 0.5), "rgba(245,240,220,0.7)", 1.5);
     ctx.setLineDash([]);
+  } else if (t === "rail") {
+    for (let k = 0; k < 5; k++) {
+      const u = 0.1 + k * 0.2;
+      line(ctx, iso(x + u, y + 0.2), iso(x + u, y + 0.8), "#5b4636", 2);
+    }
+    line(ctx, iso(x, y + 0.32), iso(x + 1, y + 0.32), "#c9ccd2", 1.4);
+    line(ctx, iso(x, y + 0.68), iso(x + 1, y + 0.68), "#c9ccd2", 1.4);
+  } else if (t === "runway") {
+    ctx.setLineDash([10, 8]);
+    line(ctx, iso(x, y + 0.5), iso(x + 1, y + 0.5), "rgba(255,255,255,0.85)", 2);
+    ctx.setLineDash([]);
+    line(ctx, iso(x, y + 0.06), iso(x + 1, y + 0.06), "rgba(255,255,255,0.6)", 1);
+    line(ctx, iso(x, y + 0.94), iso(x + 1, y + 0.94), "rgba(255,255,255,0.6)", 1);
   } else if (t === "water" || t === "pond") {
     for (let k = 0; k < 2; k++) {
       const u = hash(x, y, k);

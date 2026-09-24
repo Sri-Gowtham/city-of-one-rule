@@ -3,6 +3,7 @@ import type { Sim } from "./engine";
 import type { Building, BuildingKind, Cohorts, DistrictId, DistrictState } from "./types";
 import { DISTRICT_NAMES, placeOnLot } from "./world";
 import { GRADUATE_JOBS, makeNewcomer, occupationProfile, occupationWork } from "./citizens";
+import { infra } from "./projects";
 
 export const LIVING_DISTRICTS: DistrictId[] = ["downtown", "residential", "industrial", "oldtown", "university", "suburbs"];
 
@@ -214,11 +215,19 @@ export function evolveCity(sim: Sim) {
     housing[b.district] = (housing[b.district] ?? 0) + rawHousing(b);
     if (!b.closed && (b.kind === "factory" || b.kind === "power")) pollution[b.district] = (pollution[b.district] ?? 0) + 1;
   }
+  const inf = infra(sim);
+  const jobBoost: Record<string, number> = {
+    industrial: 1 + (inf.port ? 0.15 : 0) + (inf.shipyard ? 0.2 : 0) + (inf.rail ? 0.05 : 0),
+    coast: 1 + (inf.airport ? 0.5 : 0),
+    downtown: 1 + (inf.airport ? 0.05 : 0) + (inf.metro ? 0.05 : 0),
+  };
+  if (inf.port) pollution.industrial = (pollution.industrial ?? 0) + 1;
+  if (inf.shipyard) pollution.industrial = (pollution.industrial ?? 0) + 1;
   let cityJobs = 0;
   let cityWorkers = 0;
   for (const d of sim.districts) {
     const knowledge = 0.8 + d.skill * 0.45 + (sim.hidden.innovation - 50) / 250;
-    d.jobs = (jobs[d.id] ?? 0) * sim.jobScale * (P.workHours < 8 ? 1.1 : 1) * knowledge;
+    d.jobs = (jobs[d.id] ?? 0) * sim.jobScale * (P.workHours < 8 ? 1.1 : 1) * knowledge * (jobBoost[d.id] ?? 1);
     d.housing = (housing[d.id] ?? 0) * sim.housingScale;
     cityJobs += d.jobs;
     cityWorkers += workers(d.pop);
@@ -245,7 +254,10 @@ export function evolveCity(sim: Sim) {
       0.1 * (M.trust / 100) -
       0.18 * clamp01(rent / 40) -
       (d.id === "coast" ? 0.15 * Math.max(0, sim.bridgeCongestion - 0.85) : 0) +
-      (d.id === "coast" ? 0.08 * (M.environment / 100) : 0);
+      (d.id === "coast" ? 0.08 * (M.environment / 100) : 0) +
+      (inf.stations.includes(d.id) ? 0.03 : 0) +
+      (inf.metroStops.includes(d.id) ? 0.04 : 0) +
+      (d.id === "coast" && inf.airport ? 0.05 : 0);
   }
   const avgAttract = sim.districts.reduce((s, d) => s + d.attract, 0) / sim.districts.length;
 
@@ -286,7 +298,7 @@ export function evolveCity(sim: Sim) {
   for (const d of sim.districts) {
     const occ = total(d.pop) / Math.max(1, d.housing);
     const target = clamp(
-      50 + (occ - 0.88) * 140 + (d.income - 28) * 1.1 + (M.environment - 60) * 0.3 + (M.safety - 60) * 0.25 - (pollution[d.id] ?? 0) * 3 + (d.id === "downtown" ? 10 : 0),
+      50 + (occ - 0.88) * 140 + (d.income - 28) * 1.1 + (M.environment - 60) * 0.3 + (M.safety - 60) * 0.25 - (pollution[d.id] ?? 0) * 3 + (d.id === "downtown" ? 10 : 0) + (inf.stations.includes(d.id) ? 4 : 0) + (inf.metroStops.includes(d.id) ? 7 : 0) - (d.id === "coast" && inf.airport ? 3 : 0),
       5,
       98,
     );

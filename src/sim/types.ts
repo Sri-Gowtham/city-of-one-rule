@@ -60,7 +60,9 @@ export type TileKind =
   | "garden"
   | "yard"
   | "pond"
-  | "bridge";
+  | "bridge"
+  | "rail"
+  | "runway";
 
 export type BuildingKind =
   | "house"
@@ -90,7 +92,8 @@ export type BuildingKind =
   | "workshop"
   | "police"
   | "firestation"
-  | "hospital";
+  | "hospital"
+  | "terminal";
 
 export type AgeBand = "youth" | "adult" | "elder";
 export type Accessory = "none" | "backpack" | "badge" | "helmet" | "coat" | "vest";
@@ -306,7 +309,22 @@ export interface Tree {
 }
 
 export interface Prop {
-  kind: "streetlight" | "billboard" | "bench" | "fountain" | "noticeboard" | "stall" | "crane" | "hydrant" | "bikerack" | "bin";
+  kind:
+    | "streetlight"
+    | "billboard"
+    | "bench"
+    | "fountain"
+    | "noticeboard"
+    | "stall"
+    | "crane"
+    | "hydrant"
+    | "bikerack"
+    | "bin"
+    | "platform"
+    | "metro"
+    | "containers"
+    | "shipyard"
+    | "tower";
   x: number;
   y: number;
   variant: number;

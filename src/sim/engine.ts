@@ -274,6 +274,8 @@ export class Sim {
   projects: ProjectState[] = [];
   bridgeCongestion = 0;
   congestionDays = 0;
+  railStations: string[] = [];
+  metroStops: string[] = [];
   samples: { era: number; hour: number; m: Record<MetricKey, number> }[] = [];
 
   private base = { econ: [] as number[], crime: [] as number[], argue: [] as number[], pollution: [] as number[], trees: 0, litter: 0 };
@@ -1702,7 +1704,10 @@ export class Sim {
           (this.world.trees.length - this.base.trees) * 0.28 -
           (this.world.litter.length - this.base.litter) * 0.45 -
           ((this.roll.pollution ?? 0) - nearest(this.base.pollution)) * 0.8 +
-          (P.wasteTax ? 3 : 0),
+          (P.wasteTax ? 3 : 0) -
+          (this.world.flags.has("port") ? 3 : 0) -
+          (this.world.flags.has("shipyard") ? 2 : 0) -
+          (this.world.flags.has("airport") ? 4 : 0),
       ),
     };
     for (const k of Object.keys(target) as MetricKey[]) {

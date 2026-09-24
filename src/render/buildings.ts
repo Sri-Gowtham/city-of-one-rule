@@ -66,6 +66,7 @@ const MATERIAL: Record<BuildingKind, Material> = {
   police: "concrete",
   firestation: "brick",
   hospital: "concrete",
+  terminal: "glass",
 };
 
 const EMBLEM: Partial<Record<BuildingKind, string>> = {
@@ -89,6 +90,7 @@ const EMBLEM: Partial<Record<BuildingKind, string>> = {
   police: "🚓",
   firestation: "🚒",
   hospital: "🏥",
+  terminal: "✈️",
 };
 
 const STOREFRONT: ReadonlySet<BuildingKind> = new Set<BuildingKind>(["shop", "cafe", "restaurant", "boutique", "repair", "workshop"]);
@@ -878,6 +880,23 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       const flag = iso(x + w * 0.5, y + 0.15, H);
       line(ctx, flag, [flag[0], flag[1] - 20], "#666", 1.5);
       poly(ctx, [[flag[0], flag[1] - 20], [flag[0] + 12, flag[1] - 17], [flag[0], flag[1] - 14]], "#d8433b");
+      break;
+    }
+    case "terminal": {
+      windows("L", w * 3, b.floors, 0.92, 0.75, false, "#cfe6f5");
+      windows("R", h * 3, b.floors, 0.92, 0.75, false, "#9cc3dd");
+      flatRoof("#e9eef2");
+      const a = up(W, H);
+      const e = up(E, H);
+      const s2 = up(S, H);
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.quadraticCurveTo((a[0] + s2[0]) / 2, (a[1] + s2[1]) / 2 - 16, s2[0], s2[1]);
+      ctx.quadraticCurveTo((s2[0] + e[0]) / 2, (s2[1] + e[1]) / 2 - 16, e[0], e[1]);
+      ctx.strokeStyle = "#b9c4cc";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      canopy();
       break;
     }
     case "kiosk": {

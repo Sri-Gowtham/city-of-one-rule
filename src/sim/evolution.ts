@@ -2,6 +2,7 @@ import { clamp, clamp01 } from "./rng";
 import type { Sim } from "./engine";
 import type { Building, BuildingKind, Cohorts, DistrictId, DistrictState } from "./types";
 import { DISTRICT_NAMES, placeOnLot } from "./world";
+import { GRADUATE_JOBS, makeNewcomer, occupationProfile, occupationWork } from "./citizens";
 
 export const LIVING_DISTRICTS: DistrictId[] = ["downtown", "residential", "industrial", "oldtown", "university", "suburbs"];
 
@@ -47,13 +48,14 @@ const START_SHARE: Record<DistrictId, Cohorts> = {
   university: { children: 0.05, students: 0.45, young: 0.3, adults: 0.15, elderly: 0.05 },
   suburbs: { children: 0.22, students: 0.08, young: 0.15, adults: 0.35, elderly: 0.2 },
   park: { children: 0, students: 0, young: 0, adults: 0, elderly: 0 },
+  coast: { children: 0.12, students: 0.08, young: 0.35, adults: 0.35, elderly: 0.1 },
 };
 
 export const total = (p: Cohorts) => p.children + p.students + p.young + p.adults + p.elderly;
 const workers = (p: Cohorts) => p.young + p.adults + p.students * 0.2;
 
 function rawHousing(b: Building): number {
-  if (b.closed) return 0;
+  if (b.closed || b.construction < 1) return 0;
   if (b.kind === "house") return 16;
   if (b.kind === "apartment") return b.floors * b.w * b.h * 10;
   return 0;
@@ -61,7 +63,7 @@ function rawHousing(b: Building): number {
 
 function rawJobs(sim: Sim, b: Building): number {
   const w = JOB_WEIGHT[b.kind];
-  if (!w || b.closed) return 0;
+  if (!w || b.closed || b.construction < 1) return 0;
   let jobs = w * Math.max(1, b.floors) * b.w * b.h;
   const biz = sim.businessAt(b.id);
   if (biz) {
@@ -109,6 +111,64 @@ export function initDistricts(sim: Sim) {
   sim.jobScale = (workforce * 0.94) / Math.max(1, jSum);
   for (const d of sim.districts) d.jobs = (jobs[d.id] ?? 0) * sim.jobScale;
   sim.daySamples.push(citySample(sim));
+}
+
+const an = (w: string) => (/^[aeiou]/i.test(w) ? `an ${w}` : `a ${w}`);
+
+function turnover(sim: Sim) {
+  const rng = sim.rng;
+  const pop = (id: DistrictId) => total(sim.districts.find((d) => d.id === id)!.pop) || 1;
+  const shrinking = [...sim.districts].filter((d) => d.netMigration < -pop(d.id) * 0.0012).sort((a, b) => a.netMigration - b.netMigration);
+  const growing = [...sim.districts].filter((d) => d.netMigration > pop(d.id) * 0.0012).sort((a, b) => b.netMigration - a.netMigration);
+  const best = growing[0] ?? [...sim.districts].sort((a, b) => b.attract - a.attract)[0];
+
+  if (shrinking.length && best) {
+    const from = shrinking[0].id;
+    const leavers = sim.citizens
+      .filter((c) => c.id > 4 && sim.world.buildings[c.homeId].district === from)
+      .sort((a, b) => a.mood - b.mood + (a.workId === null ? -20 : 0) - (b.workId === null ? -20 : 0));
+    const leaver = leavers[0];
+    if (leaver) {
+      const newcomer = makeNewcomer(rng, sim.world, sim.citizens, leaver.id, best.id);
+      const home = sim.world.buildings[newcomer.homeId];
+      const work = newcomer.workId !== null ? sim.world.buildings[newcomer.workId] : null;
+      sim.pushEvent(`👋 ${leaver.name} (${leaver.occupation.toLowerCase()}) left ${DISTRICT_NAMES[from]} for better prospects.`, "moved", 2, leaver.x, leaver.y);
+      newcomer.log.push({
+        era: sim.era,
+        hour: 24,
+        text: `Moved to ${DISTRICT_NAMES[home.district]}${work ? ` for a job at ${work.name || "the " + work.kind}` : ""}.`,
+      });
+      newcomer.x = home.door.x + 0.5;
+      newcomer.y = home.door.y + 0.5;
+      sim.citizens[leaver.id] = newcomer;
+      sim.cityStories.push({
+        title: "COMINGS AND GOINGS",
+        text: `${leaver.name} left ${DISTRICT_NAMES[from]}; ${newcomer.name} arrived in ${DISTRICT_NAMES[home.district]} as ${an(newcomer.occupation.toLowerCase())}.`,
+      });
+      sim.pushEvent(`🧳 ${newcomer.name} moved into ${DISTRICT_NAMES[home.district]} as ${an(newcomer.occupation.toLowerCase())}.`, "moved", 2, newcomer.x, newcomer.y, newcomer.id);
+    }
+  }
+
+  const uni = sim.districts.find((d) => d.id === "university");
+  for (const c of sim.citizens) {
+    if (c.occupation !== "Student" || !uni || uni.skill < 0.45 || !rng.chance(0.05 + (uni.skill - 0.45) * 0.2)) continue;
+    const job = rng.pick(GRADUATE_JOBS);
+    const kinds = occupationWork(job) ?? [];
+    const options = sim.world.buildings.filter((b) => kinds.includes(b.kind) && !b.closed);
+    const work = options.length ? rng.pick(options) : null;
+    const prof = occupationProfile(job);
+    c.occupation = job;
+    c.group = prof.group;
+    c.wage = prof.wage;
+    c.stipend = prof.stipend;
+    c.accessory = prof.accessory;
+    c.ageBand = "adult";
+    c.workId = work?.id ?? null;
+    c.log.push({ era: sim.era, hour: 24, text: `Graduated. Now ${an(job.toLowerCase())}${work ? ` at ${work.name || "the " + work.kind}` : ""}.` });
+    sim.cityStories.push({ title: "CLASS OF DAY " + sim.era, text: `${c.name} graduated and joined the workforce as ${an(job.toLowerCase())}.` });
+    sim.pushEvent(`🎓 ${c.name} graduated and became ${an(job.toLowerCase())}.`, "graduate", 2, c.x, c.y, c.id);
+    break;
+  }
 }
 
 export function population(sim: Sim): number {
@@ -183,7 +243,9 @@ export function evolveCity(sim: Sim) {
       0.05 * (pollution[d.id] ?? 0) +
       0.13 * (M.happiness / 100) +
       0.1 * (M.trust / 100) -
-      0.18 * clamp01(rent / 40);
+      0.18 * clamp01(rent / 40) -
+      (d.id === "coast" ? 0.15 * Math.max(0, sim.bridgeCongestion - 0.85) : 0) +
+      (d.id === "coast" ? 0.08 * (M.environment / 100) : 0);
   }
   const avgAttract = sim.districts.reduce((s, d) => s + d.attract, 0) / sim.districts.length;
 
@@ -204,7 +266,7 @@ export function evolveCity(sim: Sim) {
 
     const n = total(p);
     const vacancy = d.housing - n;
-    const inflow = n * (0.025 * (d.attract - avgAttract) + 0.02 * (d.attract - 0.62));
+    const inflow = n * (0.025 * (d.attract - avgAttract) + 0.02 * (d.attract - 0.62)) + Math.max(0, vacancy) * 0.05 * clamp01((d.attract - 0.45) * 4);
     const move = inflow > 0 ? Math.min(inflow, Math.max(0, vacancy) + n * 0.003) : Math.max(inflow, -n * 0.03);
     d.netMigration = move;
     const share = move > 0 ? { young: 0.55, adults: 0.3, children: 0.1, students: 0.05 } : { young: 0.5, adults: 0.35, children: 0.1, students: 0.05 };
@@ -318,5 +380,6 @@ export function evolveCity(sim: Sim) {
       text: `The population ${delta > 0 ? "grew" : "fell"} by ${Math.abs(delta).toLocaleString()} overnight, led by ${DISTRICT_NAMES[top.id]}.`,
     });
   }
+  turnover(sim);
   sim.daySamples.push(citySample(sim));
 }

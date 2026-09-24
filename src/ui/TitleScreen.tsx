@@ -3,8 +3,10 @@ import { Sim } from "../sim/engine";
 import { CityRenderer } from "../render/renderer";
 import { CityCanvas } from "./CityCanvas";
 import { play, startAudio } from "./audio";
+import { savedInfo } from "../sim/save";
 
-export function TitleScreen({ onStart }: { onStart: (eras: number) => void }) {
+export function TitleScreen({ onStart, onContinue }: { onStart: (eras: number) => void; onContinue: () => void }) {
+  const save = useMemo(() => savedInfo(), []);
   const ambient = useMemo(() => {
     const s = new Sim(Math.floor(Math.random() * 1e9), 1, true);
     s.update(4);
@@ -58,6 +60,17 @@ export function TitleScreen({ onStart }: { onStart: (eras: number) => void }) {
               Endless
             </button>
           </div>
+          {save && (
+            <button
+              className="ghost continue"
+              onClick={() => {
+                startAudio();
+                onContinue();
+              }}
+            >
+              Continue your city · Day {save.era} · {save.population.toLocaleString()} residents
+            </button>
+          )}
           <button className="cta big" onClick={() => {
               startAudio();
               play("rule");

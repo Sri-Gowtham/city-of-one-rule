@@ -13,6 +13,7 @@ import { useSimTick } from "./useSim";
 import { TrendsPanel } from "./Trends";
 import { isMuted, play, playRule, setHumForHour, setMuted, setRuleAmbience } from "./audio";
 import type { Lens } from "../render/renderer";
+import { saveGame } from "../sim/save";
 
 const TIPS = [
   "Your rule is live. Watch the feed on the left: it reports what citizens actually do.",
@@ -60,7 +61,8 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
 
   useEffect(() => {
     if (phase === "newspaper") play("paper");
-  }, [phase]);
+    if (phase === "choosing" || phase === "report") saveGame(sim);
+  }, [phase, sim]);
 
   const activeRule = sim.activeRule;
   useEffect(() => {

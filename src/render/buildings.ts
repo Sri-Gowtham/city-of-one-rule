@@ -182,7 +182,7 @@ export function buildSprite(b: Building, scale: number): Sprite {
 }
 
 export function spriteKey(b: Building): string {
-  return `${b.closed}|${b.shared}|${b.name}|${b.floors}|${b.level}|${Math.round(b.condition * 5)}`;
+  return `${b.closed}|${b.shared}|${b.name}|${b.floors}|${b.level}|${Math.round(b.condition * 5)}|${Math.round(b.construction * 8)}`;
 }
 
 export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: BuildCtx) {
@@ -207,6 +207,10 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     f(u1, v1),
     f(u0, v1),
   ];
+  if (b.construction < 1) {
+    drawConstruction(ctx, b, H);
+    return;
+  }
   const closed = b.closed;
   const wall = closed ? "#8c8782" : b.wall;
   const accent = closed ? "#6f6a66" : b.accent;
@@ -943,4 +947,37 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       ctx.fill();
     }
   }
+}
+
+function drawConstruction(ctx: CanvasRenderingContext2D, b: Building, fullH: number) {
+  const { x, y, w, h } = b;
+  const H = Math.max(10, fullH * b.construction);
+  poly(ctx, [iso(x - 0.1, y - 0.1), iso(x + w + 0.1, y - 0.1), iso(x + w + 0.1, y + h + 0.1), iso(x - 0.1, y + h + 0.1)], "#b39873");
+  box(ctx, x + 0.12, y + 0.12, w - 0.24, h - 0.24, 0, H, "#a9a39a", "#8f8a82");
+  ctx.strokeStyle = "rgba(210,140,40,0.9)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const [u, v] of [
+    [0, 1],
+    [1, 1],
+    [1, 0],
+  ] as const) {
+    const base = iso(x + u * w, y + v * h);
+    ctx.moveTo(base[0], base[1]);
+    ctx.lineTo(base[0], base[1] - H - 6);
+  }
+  for (let z = 8; z < H + 6; z += 8) {
+    const a = iso(x, y + h, z);
+    const m = iso(x + w, y + h, z);
+    const e = iso(x + w, y, z);
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(m[0], m[1]);
+    ctx.lineTo(e[0], e[1]);
+  }
+  ctx.stroke();
+  const top = iso(x + w * 0.8, y + h * 0.2, H);
+  line(ctx, top, [top[0], top[1] - 50], "#e0a82e", 2.5);
+  line(ctx, [top[0] - 10, top[1] - 48], [top[0] + 40, top[1] - 48], "#e0a82e", 2.5);
+  line(ctx, [top[0] + 30, top[1] - 48], [top[0] + 30, top[1] - 30], "#333", 1);
+  emoji(ctx, "🏗️", iso(x + w / 2, y + h / 2, H + 14), 14);
 }

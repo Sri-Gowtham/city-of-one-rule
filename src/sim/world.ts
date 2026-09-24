@@ -3,7 +3,17 @@ import type { Building, BuildingKind, DistrictId, TileKind, World } from "./type
 
 export const BLOCKS = 7;
 export const LAST_ROAD = 1 + BLOCKS * 6;
-export const S = LAST_ROAD + 4;
+export const MAIN = LAST_ROAD + 4;
+export const ISLAND_X0 = MAIN + 3;
+export const ISLAND_X1 = ISLAND_X0 + 7;
+export const ISLAND_Y0 = 7;
+export const ISLAND_Y1 = MAIN - 9;
+export const BRIDGE_Y = ROADS_Y();
+export const S = ISLAND_X1 + 4;
+
+function ROADS_Y() {
+  return 1 + Math.floor(BLOCKS / 2) * 6;
+}
 export const ROADS = Array.from({ length: BLOCKS + 1 }, (_, i) => 1 + i * 6);
 const ORIGINS = Array.from({ length: BLOCKS }, (_, i) => 2 + i * 6);
 const DIRS: readonly [number, number][] = [
@@ -46,6 +56,7 @@ const FILLER: Record<DistrictId, LotSpec[]> = {
   ],
   industrial: [{ t: "big", kind: "warehouse" }, { t: "yard" }, { t: "big", kind: "apartment" }, { t: "big", kind: "factory" }],
   park: [],
+  coast: [],
 };
 
 export const DISTRICT_NAMES: Record<DistrictId, string> = {
@@ -56,6 +67,7 @@ export const DISTRICT_NAMES: Record<DistrictId, string> = {
   university: "University District",
   suburbs: "Suburbs",
   park: "Central Park",
+  coast: "Harborview",
 };
 
 type LotSpec =
@@ -143,6 +155,7 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
     ...rep<LotSpec>(3, { t: "empty" }),
   ],
   park: [],
+  coast: [],
 };
 
 const FLOORS: Record<BuildingKind, [number, number]> = {
@@ -253,8 +266,13 @@ export function generateWorld(rng: Rng): World {
 
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
-      if (x >= S - 2 || y >= S - 2) set(x, y, "water");
-      else if (x === S - 3 || y === S - 3) set(x, y, "sand");
+      const island = x >= ISLAND_X0 - 1 && x <= ISLAND_X1 + 1 && y >= ISLAND_Y0 - 1 && y <= ISLAND_Y1 + 1;
+      if (island) {
+        const edge = x === ISLAND_X0 - 1 || x === ISLAND_X1 + 1 || y === ISLAND_Y0 - 1 || y === ISLAND_Y1 + 1;
+        set(x, y, edge ? "sand" : "grass");
+        district[idx(x, y)] = "coast";
+      } else if (x >= MAIN - 2 || y >= MAIN - 2) set(x, y, "water");
+      else if (x === MAIN - 3 || y === MAIN - 3) set(x, y, "sand");
     }
   }
   for (const r of ROADS) {
@@ -302,22 +320,24 @@ export function generateWorld(rng: Rng): World {
     }
   }
 
-  for (let x = 0; x < S - 3; x++) {
+  for (let x = 0; x < MAIN - 3; x++) {
     if (tiles[idx(x, 0)] === "grass" && rng.chance(0.4)) addTree(world, rng, x, 0, -999, false);
     if (tiles[idx(0, x)] === "grass" && rng.chance(0.4)) addTree(world, rng, 0, x, -999, false);
   }
-  for (let k = 2; k < S - 3; k++) {
+  for (let k = 2; k < MAIN - 3; k++) {
     if (k % 5 === 0) {
-      addTree(world, rng, k, S - 3, -999, false);
-      addTree(world, rng, S - 3, k, -999, false);
+      addTree(world, rng, k, MAIN - 3, -999, false);
+      addTree(world, rng, MAIN - 3, k, -999, false);
     } else if (k % 5 === 2) {
-      world.props.push({ kind: "bench", x: k, y: S - 3, variant: 0 });
-      world.props.push({ kind: "bench", x: S - 3, y: k, variant: 1 });
+      world.props.push({ kind: "bench", x: k, y: MAIN - 3, variant: 0 });
+      world.props.push({ kind: "bench", x: MAIN - 3, y: k, variant: 1 });
     }
   }
-  world.props.push({ kind: "crane", x: S - 7, y: S - 3, variant: 0 });
-  world.props.push({ kind: "crane", x: S - 12, y: S - 3, variant: 0 });
-  world.props.push({ kind: "crane", x: S - 3, y: S - 7, variant: 1 });
+  world.props.push({ kind: "crane", x: MAIN - 7, y: MAIN - 3, variant: 0 });
+  world.props.push({ kind: "crane", x: MAIN - 12, y: MAIN - 3, variant: 0 });
+  world.props.push({ kind: "crane", x: MAIN - 3, y: MAIN - 7, variant: 1 });
+  for (let y = ISLAND_Y0; y <= ISLAND_Y1; y++)
+    for (let x = ISLAND_X0; x <= ISLAND_X1; x++) if (rng.chance(0.28)) addTree(world, rng, x, y, -999, false);
 
   for (const rx of ROADS) for (const ry of ROADS) world.props.push({ kind: "streetlight", x: rx, y: ry, variant: 0 });
 
@@ -361,7 +381,7 @@ export function generateWorld(rng: Rng): World {
 
   for (let i = 0; i < S * S; i++) {
     const t = tiles[i];
-    if ((t === "park" || t === "plaza" || t === "sand" || t === "path") && occupied[i] === -1) {
+    if ((t === "park" || t === "plaza" || t === "sand" || t === "path") && occupied[i] === -1 && district[i] !== "coast") {
       world.outdoorSpots.push({ x: i % S, y: Math.floor(i / S) });
     }
   }
@@ -508,6 +528,7 @@ export function addBuilding(
     shared: false,
     closed: false,
     born,
+    construction: 1,
     seed: rng.int(0, 1e6),
     level: district === "downtown" ? 3 : district === "suburbs" || district === "university" ? 2 : district === "industrial" ? 1 : 2,
     condition: 0.7 + rng.range(0, 0.25),
@@ -652,4 +673,85 @@ export function placeInPark(world: World, rng: Rng, kind: BuildingKind, name: st
   world.outdoorSpots = world.outdoorSpots.filter((o) => !(o.x === s.x && o.y === s.y));
   world.groundVersion++;
   return b;
+}
+
+export function bridgeTiles(): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (let x = LAST_ROAD + 1; x < ISLAND_X0; x++) out.push({ x, y: BRIDGE_Y });
+  return out;
+}
+
+export function findBigLot(world: World, prefer: DistrictId[]): { x: number; y: number; district: DistrictId } | null {
+  const free = new Set(world.lots.filter((l) => !l.used).map((l) => idx(l.x, l.y)));
+  const candidates = world.lots.filter(
+    (l) => !l.used && free.has(idx(l.x + 1, l.y)) && free.has(idx(l.x, l.y + 1)) && free.has(idx(l.x + 1, l.y + 1)),
+  );
+  if (!candidates.length) return null;
+  const preferred = candidates.filter((c) => prefer.includes(c.district));
+  const pick = (preferred.length ? preferred : candidates)[0];
+  return { x: pick.x, y: pick.y, district: pick.district };
+}
+
+export function claimBigLot(world: World, x: number, y: number) {
+  for (const l of world.lots) if (l.x >= x && l.x <= x + 1 && l.y >= y && l.y <= y + 1) l.used = true;
+  for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) world.tiles[idx(x + dx, y + dy)] = "walk";
+}
+
+export function buildIsland(world: World, rng: Rng, era: number): Building[] {
+  const built: Building[] = [];
+  const set = (x: number, y: number, t: TileKind) => (world.tiles[idx(x, y)] = t);
+  for (const t of bridgeTiles()) set(t.x, t.y, "bridge");
+  for (let y = ISLAND_Y0; y <= ISLAND_Y1; y++) {
+    for (let x = ISLAND_X0; x <= ISLAND_X1; x++) {
+      const i = idx(x, y);
+      if (world.treeAt.has(i)) {
+        world.treeAt.delete(i);
+      }
+      set(x, y, "garden");
+    }
+  }
+  world.trees = world.trees.filter((t) => world.treeAt.has(idx(t.x, t.y)));
+  for (let y = ISLAND_Y0; y <= ISLAND_Y1; y++) set(ISLAND_X0, y, "road");
+  const rows: number[] = [];
+  for (let y = ISLAND_Y0; y <= ISLAND_Y1; y += 6) {
+    rows.push(y);
+    for (let x = ISLAND_X0; x <= ISLAND_X1; x++) set(x, y, "road");
+  }
+  const hotels = ["Seaview Hotel", "Harborview Suites", "The Lighthouse Inn", "Coral Bay Hotel", "Driftwood Lodge"];
+  let hi = 0;
+  for (const r of rows) {
+    const y0 = r + 1;
+    if (y0 + 3 > ISLAND_Y1) break;
+    const b1 = addBuilding(world, rng, "apartment", ISLAND_X0 + 1, y0, 2, 2, "coast", hotels[hi++ % hotels.length], era);
+    b1.wall = rng.pick(["#f3e6cf", "#e9f1f4", "#f6dcc8"]);
+    const kinds: BuildingKind[] = ["cafe", "restaurant", "shop", "house"];
+    rng.shuffle(kinds);
+    const quad = [
+      [ISLAND_X0 + 4, y0],
+      [ISLAND_X0 + 5, y0],
+      [ISLAND_X0 + 4, y0 + 1],
+      [ISLAND_X0 + 5, y0 + 1],
+    ];
+    quad.forEach(([x, y], k) => built.push(addBuilding(world, rng, kinds[k], x, y, 1, 1, "coast", "", era)));
+    built.push(b1);
+    if (y0 + 4 <= ISLAND_Y1) {
+      built.push(addBuilding(world, rng, "house", ISLAND_X0 + 1, y0 + 3, 1, 1, "coast", "", era));
+      built.push(addBuilding(world, rng, "house", ISLAND_X0 + 4, y0 + 3, 1, 1, "coast", "", era));
+    }
+    for (let y = y0; y < Math.min(r + 6, ISLAND_Y1 + 1); y++)
+      for (const x of [ISLAND_X1 - 1, ISLAND_X1]) {
+        set(x, y, "park");
+        if (rng.chance(0.3)) addTree(world, rng, x, y, era * 24, true);
+      }
+    world.props.push({ kind: "bench", x: ISLAND_X1, y: y0 + 1, variant: 1 });
+  }
+  for (const b of built) b.door = findDoor(world, b);
+  for (let i = 0; i < world.tiles.length; i++) {
+    const t = world.tiles[i];
+    if (world.district[i] === "coast" && (t === "park" || t === "sand") && world.occupied[i] === -1)
+      world.outdoorSpots.push({ x: i % S, y: Math.floor(i / S) });
+  }
+  world.flags.add("bridge");
+  world.groundVersion++;
+  return built;
 }

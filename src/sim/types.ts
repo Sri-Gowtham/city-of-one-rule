@@ -45,7 +45,7 @@ export const CULTURE_KEYS: readonly CultureKey[] = [
   "localism",
 ];
 
-export type DistrictId = "downtown" | "residential" | "industrial" | "oldtown" | "university" | "suburbs" | "park";
+export type DistrictId = "downtown" | "residential" | "industrial" | "oldtown" | "university" | "suburbs" | "park" | "coast";
 
 export type TileKind =
   | "grass"
@@ -59,7 +59,8 @@ export type TileKind =
   | "walk"
   | "garden"
   | "yard"
-  | "pond";
+  | "pond"
+  | "bridge";
 
 export type BuildingKind =
   | "house"
@@ -291,6 +292,7 @@ export interface Building {
   level: number;
   condition: number;
   levelStreak: number;
+  construction: number;
 }
 
 export interface Tree {

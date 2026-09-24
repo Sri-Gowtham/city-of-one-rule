@@ -4,6 +4,8 @@ import { DISTRICT_NAMES } from "../sim/world";
 import { CULTURE_KEYS } from "../sim/types";
 import { CULTURE_LABEL, clock, cultureWord, describeActivity, moodFace } from "./labels";
 import { total } from "../sim/evolution";
+import { cityIdentity } from "../sim/identity";
+import { PROJECT_NAMES } from "../sim/projects";
 
 const TREND_LABEL: Record<string, string> = {
   help: "Helping strangers",
@@ -200,6 +202,7 @@ export function LensPanel({ sim, selected, follow, setFollow, onSelect }: LensPr
   return (
     <aside className="lens">
       <div className="panel-title">CITY PULSE</div>
+      {sim.era > 0 && <p className="identity">{cityIdentity(sim).summary}</p>}
       <p className="muted small">Click any citizen or building to observe it. The city won't tell you whether your rule is good — watch what people do.</p>
       {sim.phase === "running" && trends.length > 0 && (
         <>
@@ -210,6 +213,31 @@ export function LensPanel({ sim, selected, follow, setFollow, onSelect }: LensPr
               <b className={t.r >= 1 ? "up" : "down"}>{t.r >= 1.15 ? "▲ rising" : t.r <= 0.85 ? "▼ falling" : "● steady"}</b>
             </div>
           ))}
+        </>
+      )}
+      {sim.projects.length > 0 && (
+        <>
+          <div className="panel-title">DEVELOPMENTS</div>
+          {sim.projects.map((p) => (
+            <div className="project" key={p.id}>
+              <span>{PROJECT_NAMES[p.id]}</span>
+              {p.status === "done" ? (
+                <em className="up">Open since day {p.startedEra + p.totalDays}</em>
+              ) : (
+                <div className="bar">
+                  <div style={{ width: `${Math.round((1 - p.daysLeft / p.totalDays) * 100)}%` }} />
+                </div>
+              )}
+            </div>
+          ))}
+          {sim.world.flags.has("bridge") && (
+            <div className="project">
+              <span>Harbor Bridge traffic</span>
+              <em className={sim.bridgeCongestion > 1 ? "down" : sim.bridgeCongestion > 0.8 ? "" : "up"}>
+                {Math.round(sim.bridgeCongestion * 100)}% of capacity
+              </em>
+            </div>
+          )}
         </>
       )}
       <div className="panel-title">DISTRICTS</div>

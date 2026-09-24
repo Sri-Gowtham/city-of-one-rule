@@ -13,6 +13,7 @@ const FIXED: Record<string, string> = {
   path: "#d6c297",
   lot: "#b39873",
   yard: "#a6a29a",
+  bridge: "#6f747e",
 };
 
 function grassColor(env: number, district: string, n: number, kind: string): string {
@@ -77,6 +78,12 @@ function decorate(ctx: CanvasRenderingContext2D, world: World, x: number, y: num
         line(ctx, iso(x + u, y + 0.8), iso(x + u, y + 0.95), "rgba(240,240,240,0.55)", 2);
       }
     }
+  } else if (t === "bridge") {
+    line(ctx, iso(x, y + 0.08), iso(x + 1, y + 0.08), "#c9ccd2", 2.5);
+    line(ctx, iso(x, y + 0.92), iso(x + 1, y + 0.92), "#c9ccd2", 2.5);
+    ctx.setLineDash([6, 6]);
+    line(ctx, iso(x + 0.1, y + 0.5), iso(x + 0.9, y + 0.5), "rgba(245,240,220,0.7)", 1.5);
+    ctx.setLineDash([]);
   } else if (t === "water" || t === "pond") {
     for (let k = 0; k < 2; k++) {
       const u = hash(x, y, k);

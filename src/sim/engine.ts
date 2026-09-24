@@ -37,6 +37,8 @@ import { PROP_CAP, generateCitizens, rentFor } from "./citizens";
 import { generateBusinesses, makeBusiness } from "./businesses";
 import { buildFrontPage } from "./news";
 import { evolveCity, initDistricts } from "./evolution";
+import { updateProjects } from "./projects";
+import type { ProjectState } from "./projects";
 
 export const TICK = 1 / 6;
 export const HOURS_PER_SECOND = 0.33;
@@ -269,6 +271,9 @@ export class Sim {
   jobScale = 1;
   daySamples: CityDaySample[] = [];
   cityStories: { title: string; text: string }[] = [];
+  projects: ProjectState[] = [];
+  bridgeCongestion = 0;
+  congestionDays = 0;
   samples: { era: number; hour: number; m: Record<MetricKey, number> }[] = [];
 
   private base = { econ: [] as number[], crime: [] as number[], argue: [] as number[], pollution: [] as number[], trees: 0, litter: 0 };
@@ -519,7 +524,10 @@ export class Sim {
     this.updateCulture();
     this.checkUnlocks();
     this.growBusinesses();
-    if (!this.ambient) evolveCity(this);
+    if (!this.ambient) {
+      updateProjects(this);
+      evolveCity(this);
+    }
     this.snapshots.push(this.snapshot());
     this.papers.push(buildFrontPage(this));
     this.prevCounts = { ...this.counts };
@@ -851,6 +859,7 @@ export class Sim {
     else w *= 1 + (C.localism - 50) / 100 + (P.ads ? 0 : 0.35);
     if (this.flags.has("reputation-marketing")) w *= 0.5 + biz.reputation / 60;
     if (biz.type === "Boutique") w *= P.ubi > 0 ? c.traits.ambition * 2.5 : 0.4;
+    if (b.kind === "mall" && biz.founded > 0) w *= P.ads ? 2.2 : 1.5;
     if (biz.type === "Kiosk") w *= P.outsideHour ? 2 : 1.2;
     if (biz.type === "Repair") w *= P.wasteTax ? 2.2 : 0.6;
     if (biz.strategies.includes("Discounts for helpers") && c.prop.help > 0.35) w *= 1.6;
@@ -1399,8 +1408,13 @@ export class Sim {
     return true;
   }
 
+  registerBusiness(b: Building, name: string): Business | null {
+    return this.newBusiness(b, name);
+  }
+
   private newBusiness(b: Building | null, name: string): Business | null {
     if (!b) return null;
+    if (!name) name = `${b.kind === "cafe" ? "Harbor" : b.kind === "restaurant" ? "Seafront" : "Pier"} ${b.kind === "cafe" ? "Café" : b.kind === "restaurant" ? "Grill" : "Goods"}`;
     const biz = makeBusiness(this.businesses.length, b, name, this.era);
     biz.baseVisits = 3;
     biz.baseProduction = 1;

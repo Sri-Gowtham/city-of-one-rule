@@ -1,7 +1,7 @@
 import { clamp01 } from "./rng";
 import type { Rng } from "./rng";
 import { BEHAVIORS } from "./types";
-import type { Accessory, AgeBand, Behavior, BuildingKind, Citizen, DistrictId, OccGroup, Traits, World } from "./types";
+import type { Accessory, AgeBand, Behavior, Building, BuildingKind, Citizen, DistrictId, OccGroup, Traits, World } from "./types";
 
 interface Occ {
   work: BuildingKind[] | null;
@@ -198,7 +198,67 @@ export function generateCitizens(rng: Rng, world: World): Citizen[] {
   const occupancy = new Map<number, number>();
   const employees = new Map<number, number>();
 
-  return PEOPLE.map(([name, occupation, overrides], id) => {
+  return PEOPLE.map(([name, occupation, overrides], id) =>
+    makeCitizen(rng, world, homes, occupancy, employees, name, occupation, overrides, id, null),
+  );
+}
+
+const NEWCOMER_NAMES = [
+  "Aria", "Bilal", "Camila", "Dmitri", "Eun-ji", "Farah", "Gabriel", "Hiro", "Isla", "Jamal", "Keiko", "Lorenzo",
+  "Maribel", "Nikhil", "Odette", "Pablo", "Quinn", "Rania", "Stefan", "Talia", "Umar", "Vera", "Wanjiru", "Xavier",
+  "Yara", "Zeno", "Amelie", "Bao", "Cyrus", "Dalia", "Emeka", "Freya", "Goran", "Halima", "Ilya", "Jin",
+];
+
+const NEWCOMER_JOBS: Partial<Record<DistrictId, string[]>> = {
+  downtown: ["Office Clerk", "Software Engineer", "Banker", "Barista", "Journalist"],
+  residential: ["Teacher", "Nurse", "Cashier", "Office Clerk"],
+  industrial: ["Factory Worker", "Warehouse Worker", "Plant Operator"],
+  oldtown: ["Shop Owner", "Chef", "Artist", "Barista"],
+  university: ["Researcher", "Student", "Software Engineer", "Librarian"],
+  suburbs: ["Office Clerk", "Teacher", "Doctor", "Civil Servant"],
+  coast: ["Chef", "Barista", "Shop Owner", "Artist"],
+};
+
+export const GRADUATE_JOBS = ["Software Engineer", "Researcher", "Office Clerk", "Teacher", "Journalist"];
+
+export function occupationWork(occupation: string): BuildingKind[] | null {
+  return OCC[occupation]?.work ?? null;
+}
+
+export function occupationProfile(occupation: string) {
+  const occ = OCC[occupation];
+  return { group: occ.group, wage: occ.wage, stipend: occ.stipend, accessory: (OCC_ACCESSORY[occupation] ?? "none") as Accessory };
+}
+
+export function makeNewcomer(rng: Rng, world: World, citizens: Citizen[], id: number, district: DistrictId): Citizen {
+  const homes = world.buildings.filter((b) => CAPACITY[b.kind] && !b.closed);
+  const occupancy = new Map<number, number>();
+  const employees = new Map<number, number>();
+  for (const c of citizens) {
+    if (c.id === id) continue;
+    occupancy.set(c.homeId, (occupancy.get(c.homeId) ?? 0) + 1);
+    if (c.workId !== null) employees.set(c.workId, (employees.get(c.workId) ?? 0) + 1);
+  }
+  const used = new Set(citizens.map((c) => c.name));
+  const names = NEWCOMER_NAMES.filter((n) => !used.has(n));
+  const name = names.length ? rng.pick(names) : `${rng.pick(NEWCOMER_NAMES)} ${String.fromCharCode(65 + rng.int(0, 25))}.`;
+  const occupation = rng.pick(NEWCOMER_JOBS[district] ?? ["Office Clerk"]);
+  return makeCitizen(rng, world, homes, occupancy, employees, name, occupation, undefined, id, district);
+}
+
+function makeCitizen(
+  rng: Rng,
+  world: World,
+  homes: Building[],
+  occupancy: Map<number, number>,
+  employees: Map<number, number>,
+  name: string,
+  occupation: string,
+  overrides: Partial<Traits> | undefined,
+  id: number,
+  prefer: DistrictId | null,
+): Citizen {
+  {
     const occ = OCC[occupation];
     const t: Traits = {
       trust: rng.range(0.4, 0.75),
@@ -216,7 +276,7 @@ export function generateCitizens(rng: Rng, world: World): Citizen[] {
     if (overrides) Object.assign(t, overrides);
 
     const homeCandidates = homes.filter(
-      (h) => occ.homes.includes(h.district) && (occupancy.get(h.id) ?? 0) < (CAPACITY[h.kind] ?? 0),
+      (h) => (prefer ? h.district === prefer : occ.homes.includes(h.district)) && (occupancy.get(h.id) ?? 0) < (CAPACITY[h.kind] ?? 0),
     );
     const anyFree = homes.filter((h) => (occupancy.get(h.id) ?? 0) < (CAPACITY[h.kind] ?? 0));
     const home = rng.pick(homeCandidates.length ? homeCandidates : anyFree);
@@ -281,5 +341,5 @@ export function generateCitizens(rng: Rng, world: World): Citizen[] {
       ageBand: (occupation === "Retiree" ? "elder" : occupation === "Student" ? "youth" : "adult") as AgeBand,
       accessory: (OCC_ACCESSORY[occupation] ?? "none") as Accessory,
     } satisfies Citizen;
-  });
+  }
 }

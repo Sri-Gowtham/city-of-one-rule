@@ -1509,3 +1509,32 @@ blockquote cite {
     display: none;
   }
 }
+
+.identity {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-style: italic;
+  color: #f4ecd8;
+  margin: 0 0 6px;
+}
+.identity.big {
+  font-size: 22px;
+  margin: -8px 0 18px;
+}
+.continue {
+  color: var(--text);
+  border-color: var(--gold);
+}
+
+.project {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+.project em {
+  font-style: normal;
+  font-size: 11.5px;
+}

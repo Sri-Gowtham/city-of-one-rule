@@ -1,6 +1,6 @@
 import type { Sim } from "../sim/engine";
 import type { Building, Citizen, Prop, Tree } from "../sim/types";
-import { BLOCKS, DISTRICT_NAMES, LAST_ROAD, ROADS, S, idx } from "../sim/world";
+import { BLOCKS, BRIDGE_Y, DISTRICT_NAMES, ISLAND_X0, ISLAND_X1, ISLAND_Y0, ISLAND_Y1, LAST_ROAD, ROADS, S, idx } from "../sim/world";
 import type { DistrictId } from "../sim/types";
 import { box, buildSprite, buildingHeight, buildingHull, spriteKey } from "./buildings";
 import type { Sprite } from "./buildings";
@@ -361,13 +361,17 @@ export class CityRenderer {
           groups.set(d, [...(groups.get(d) ?? []), [cx, cy]]);
         }
       }
+      const islandLabel = { x: (ISLAND_X0 + ISLAND_X1) / 2, y: (ISLAND_Y0 + ISLAND_Y1) / 2, text: "EAST ISLAND" };
       this.labels = [...groups.entries()].map(([d, pts]) => {
         const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
         const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
         const [bx, by] = pts.sort((a, b) => Math.hypot(a[0] - mx, a[1] - my) - Math.hypot(b[0] - mx, b[1] - my))[0];
         return { x: bx, y: by, text: DISTRICT_NAMES[d].toUpperCase() };
       });
+      this.labels.push(islandLabel);
     }
+    const island = this.labels[this.labels.length - 1];
+    island.text = sim.world.flags.has("bridge") ? "HARBORVIEW" : "EAST ISLAND · UNDEVELOPED";
     if (this.cam.zoom > 1.25) return;
     const { dpr } = this;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -752,9 +756,10 @@ export class CityRenderer {
           break;
         }
       }
-      if (car.pos < 1.5 || car.pos > LAST_ROAD + 0.5) {
+      const maxPos = car.axis === 0 && car.line === BRIDGE_Y && sim.world.flags.has("bridge") ? ISLAND_X0 + 0.5 : LAST_ROAD + 0.5;
+      if (car.pos < 1.5 || car.pos > maxPos) {
         car.dir = car.pos < 1.5 ? 1 : -1;
-        car.pos = Math.max(1.5, Math.min(LAST_ROAD + 0.5, car.pos));
+        car.pos = Math.max(1.5, Math.min(maxPos, car.pos));
       }
     }
   }

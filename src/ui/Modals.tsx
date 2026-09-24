@@ -1,5 +1,6 @@
 import type { Sim } from "../sim/engine";
 import { buildReport } from "../sim/report";
+import { cityIdentity } from "../sim/identity";
 import { RULES, ruleById } from "../sim/rules";
 import { METRIC_KEYS } from "../sim/types";
 import type { FrontPage, RuleId } from "../sim/types";
@@ -156,6 +157,7 @@ export function SocietyReport({ sim, onRestart, onExplore }: { sim: Sim; onResta
       <div className="report">
         <div className="report-kicker">CITY OF ONE RULE · END OF TERM</div>
         <h1>Your city has become…</h1>
+        <p className="identity big">{cityIdentity(sim).summary}</p>
         <div className="report-grid">
           <div className="report-stats">
             <div className="pop">

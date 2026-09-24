@@ -214,13 +214,22 @@ export class CityRenderer {
 
     type D = { d: number; f: () => void };
     const list: D[] = [];
+    const vx0 = -this.cam.x / z - 160;
+    const vy0 = -this.cam.y / z - 220;
+    const vx1 = (w - this.cam.x) / z + 160;
+    const vy1 = (h - this.cam.y) / z + 120;
+    const visible = (x: number, y: number) => {
+      const [px, py] = iso(x, y);
+      return px > vx0 && px < vx1 && py > vy0 && py < vy1;
+    };
     for (const b of world.buildings) {
+      if (!visible(b.x + b.w / 2, b.y + b.h / 2)) continue;
       const hl: 0 | 1 | 2 =
         selected?.type === "building" && selected.id === b.id ? 2 : this.hover?.type === "building" && this.hover.id === b.id ? 1 : 0;
       list.push({ d: b.x + b.w + b.y + b.h - 1.02, f: () => this.drawBuildingSprite(ctx, sim, b, bc, hl, working) });
     }
-    for (const t of world.trees) list.push({ d: t.x + t.y + 1 + t.jx + t.jy, f: () => this.drawTree(ctx, t, sim) });
-    for (const p of world.props) list.push({ d: p.x + p.y + 1.05, f: () => this.drawProp(ctx, p, sim, bc) });
+    for (const t of world.trees) if (visible(t.x, t.y)) list.push({ d: t.x + t.y + 1 + t.jx + t.jy, f: () => this.drawTree(ctx, t, sim) });
+    for (const p of world.props) if (visible(p.x, p.y)) list.push({ d: p.x + p.y + 1.05, f: () => this.drawProp(ctx, p, sim, bc) });
     if (world.flags.has("market")) {
       const ps = world.plazaSpot;
       for (let k = 0; k < 3; k++) {
@@ -229,7 +238,7 @@ export class CityRenderer {
       }
     }
     for (const c of sim.citizens) {
-      if (c.inside !== null) continue;
+      if (c.inside !== null || !visible(c.x, c.y)) continue;
       list.push({ d: c.x + c.y + 0.02, f: () => this.drawCitizen(ctx, c, sim, selected) });
     }
     this.updateCars(sim, realDt, speed);

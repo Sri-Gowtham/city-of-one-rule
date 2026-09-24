@@ -182,7 +182,7 @@ export function buildSprite(b: Building, scale: number): Sprite {
 }
 
 export function spriteKey(b: Building): string {
-  return `${b.closed}|${b.shared}|${b.name}`;
+  return `${b.closed}|${b.shared}|${b.name}|${b.floors}|${b.level}|${Math.round(b.condition * 5)}`;
 }
 
 export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: BuildCtx) {
@@ -900,6 +900,32 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
 
   if (EMBLEM[kind] && !STOREFRONT.has(kind) && kind !== "techco") {
     emoji(ctx, EMBLEM[kind]!, iso(x + w / 2, y + h / 2, H + 12), 12);
+  }
+
+  // Wear: grime darkens facades as condition falls
+  const wear = Math.max(0, 0.65 - b.condition);
+  if (wear > 0.05) {
+    poly(ctx, leftFace, `rgba(60,48,36,${wear * 0.55})`);
+    poly(ctx, rightFace, `rgba(40,32,24,${wear * 0.6})`);
+    for (let k = 0; k < Math.round(wear * 14); k++) {
+      const f = k % 2 ? L : R;
+      const p = f(rnd(k, 31), rnd(k, 32) * 0.9);
+      ctx.fillStyle = "rgba(30,24,18,0.35)";
+      ctx.fillRect(p[0], p[1], 2 + rnd(k, 33) * 3, 1.5);
+    }
+  }
+  // Prosperity: higher levels earn rooftop gardens, crowns and lit trims
+  if (!closed && b.level >= 4 && kind !== "house" && kind !== "cityhall") {
+    const top = [up(N, H), up(E, H), up(S, H), up(W, H)];
+    const ctr = iso(x + w / 2, y + h / 2, H);
+    poly(ctx, top.map((p) => lerp(p, ctr, 0.3)), "rgba(110,170,90,0.85)");
+    line(ctx, up(W, H), up(S, H), b.level >= 5 ? "#e9c46a" : "rgba(255,255,255,0.6)", b.level >= 5 ? 2.2 : 1.4);
+    line(ctx, up(S, H), up(E, H), b.level >= 5 ? "#c9a33a" : "rgba(255,255,255,0.4)", b.level >= 5 ? 2.2 : 1.4);
+    if (b.level >= 5 && (kind === "office" || kind === "apartment" || kind === "techco")) {
+      box(ctx, x + w * 0.3, y + h * 0.3, w * 0.4, h * 0.4, H, 14, "#9fc3dd", "#dcebf5");
+      const spire = iso(x + w / 2, y + h / 2, H + 14);
+      line(ctx, spire, [spire[0], spire[1] - 22], "#c9a33a", 1.6);
+    }
   }
 
   // Ground-level landscaping: planters along the front

@@ -181,7 +181,7 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
         {tab === "trends" && <TrendsPanel sim={sim} />}
         {tab === "news" && <NewsPanel sim={sim} onOpen={setArchived} />}
 
-        {phase === "choosing" && draftOpen && <RuleDraft sim={sim} onChoose={choose} onPeek={() => setDraftOpen(false)} />}
+        {phase === "choosing" && draftOpen && <RuleDraft sim={sim} onChoose={choose} onPeek={() => setDraftOpen(false)} onEnd={() => sim.endTerm()} />}
         {phase === "newspaper" && latest && (
           <Newspaper
             paper={latest}

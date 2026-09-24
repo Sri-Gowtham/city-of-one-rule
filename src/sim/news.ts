@@ -215,7 +215,7 @@ export function buildFrontPage(sim: Sim): FrontPage {
     body.push(`However, ${d.charAt(0).toLowerCase()}${d.slice(1)}${downs[1] ? " " + line(downs[1]) : ""}`);
   }
 
-  const stories: { title: string; text: string }[] = [];
+  const stories: { title: string; text: string }[] = [...sim.cityStories];
   for (const n of sim.emergentNotes.slice(1)) stories.push({ title: n.headline, text: n.body });
   if (sim.openings.length) stories.push({ title: "NOW OPEN", text: `${sim.openings.join(", ")} opened for business.` });
   if (sim.closures.length) stories.push({ title: "CLOSED", text: `${sim.closures.join(", ")} closed ${sim.closures.length > 1 ? "their" : "its"} doors.` });

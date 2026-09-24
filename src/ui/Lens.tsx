@@ -3,6 +3,7 @@ import type { Pick } from "../render/renderer";
 import { DISTRICT_NAMES } from "../sim/world";
 import { CULTURE_KEYS } from "../sim/types";
 import { CULTURE_LABEL, clock, cultureWord, describeActivity, moodFace } from "./labels";
+import { total } from "../sim/evolution";
 
 const TREND_LABEL: Record<string, string> = {
   help: "Helping strangers",
@@ -138,6 +139,20 @@ export function LensPanel({ sim, selected, follow, setFollow, onSelect }: LensPr
             ✕
           </button>
         </div>
+        <div className="lens-stats">
+          <div>
+            <span>Level</span>
+            <b>{"★".repeat(b.level)}</b>
+          </div>
+          <div>
+            <span>Condition</span>
+            <b>{b.closed && !biz ? "Abandoned" : b.condition > 0.7 ? "Good" : b.condition > 0.45 ? "Worn" : "Poor"}</b>
+          </div>
+          <div>
+            <span>Floors</span>
+            <b>{b.floors}</b>
+          </div>
+        </div>
         {biz && (
           <>
             <div className={`status ${biz.open ? "open" : "closed"}`}>{biz.open ? (biz.founded > 0 ? `Opened on day ${biz.founded}` : "Open") : "Closed"}</div>
@@ -197,6 +212,20 @@ export function LensPanel({ sim, selected, follow, setFollow, onSelect }: LensPr
           ))}
         </>
       )}
+      <div className="panel-title">DISTRICTS</div>
+      <div className="districts">
+        {sim.districts.map((d) => (
+          <div key={d.id} className="district-row" title={`Education ${Math.round(d.education * 100)}% · income ${Math.round(d.income)}`}>
+            <span>{DISTRICT_NAMES[d.id]}</span>
+            <b>{Math.round(total(d.pop)).toLocaleString()}</b>
+            <em className={d.netMigration > 3 ? "up" : d.netMigration < -3 ? "down" : ""}>
+              {d.netMigration > 3 ? "▲" : d.netMigration < -3 ? "▼" : "●"}
+            </em>
+            <i>{Math.round(d.unemployment * 100)}% jobless</i>
+            <i>land {Math.round(d.landValue)}</i>
+          </div>
+        ))}
+      </div>
       <div className="panel-title">CITY CULTURE</div>
       {CULTURE_KEYS.map((k) => {
         const w = cultureWord(sim.culture[k]);

@@ -48,11 +48,14 @@ export function TitleScreen({ onStart }: { onStart: (eras: number) => void }) {
         </ol>
         <div className="title-actions">
           <div className="seg">
-            <button className={eras === 5 ? "on" : ""} onClick={() => setEras(5)}>
-              Short term · 5 days
-            </button>
             <button className={eras === 10 ? "on" : ""} onClick={() => setEras(10)}>
-              Full term · 10 days
+              10 days
+            </button>
+            <button className={eras === 30 ? "on" : ""} onClick={() => setEras(30)}>
+              30 days
+            </button>
+            <button className={!Number.isFinite(eras) ? "on" : ""} onClick={() => setEras(Infinity)}>
+              Endless
             </button>
           </div>
           <button className="cta big" onClick={() => {

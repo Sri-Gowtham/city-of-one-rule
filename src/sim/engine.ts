@@ -10,6 +10,8 @@ import type {
   DistrictId,
   Effect,
   EmergentNote,
+  CityDaySample,
+  DistrictState,
   EraSnapshot,
   FrontPage,
   GameEvent,
@@ -34,6 +36,7 @@ import {
 import { PROP_CAP, generateCitizens, rentFor } from "./citizens";
 import { generateBusinesses, makeBusiness } from "./businesses";
 import { buildFrontPage } from "./news";
+import { evolveCity, initDistricts } from "./evolution";
 
 export const TICK = 1 / 6;
 export const HOURS_PER_SECOND = 0.33;
@@ -261,6 +264,11 @@ export class Sim {
   snapshots: EraSnapshot[] = [];
   dev = { orgs: 0, businessesCreated: 0, treesPlanted: 0, closed: 0, labels: [] as string[] };
   watchId: number | null = null;
+  districts: DistrictState[] = [];
+  housingScale = 1;
+  jobScale = 1;
+  daySamples: CityDaySample[] = [];
+  cityStories: { title: string; text: string }[] = [];
   samples: { era: number; hour: number; m: Record<MetricKey, number> }[] = [];
 
   private base = { econ: [] as number[], crime: [] as number[], argue: [] as number[], pollution: [] as number[], trees: 0, litter: 0 };
@@ -291,6 +299,17 @@ export class Sim {
     for (const k of CULTURE_KEYS) this.culture[k] = 44 + this.rng.range(0, 8);
     this.unlocked = new Set(RULES.filter((r) => !r.unlock).map((r) => r.id));
     this.calibrate();
+    initDistricts(this);
+  }
+
+  get endless() {
+    return !Number.isFinite(this.totalEras);
+  }
+
+  endTerm() {
+    if (this.phase !== "choosing" && this.phase !== "newspaper") return;
+    this.phase = "report";
+    this.emit();
   }
 
   subscribe(fn: () => void): () => void {
@@ -353,6 +372,7 @@ export class Sim {
     this.bizNews = [];
     this.closures = [];
     this.openings = [];
+    this.cityStories = [];
     this.shopOwnerHelper = null;
     this.econToday = 0;
     if (newNight) {
@@ -499,6 +519,7 @@ export class Sim {
     this.updateCulture();
     this.checkUnlocks();
     this.growBusinesses();
+    if (!this.ambient) evolveCity(this);
     this.snapshots.push(this.snapshot());
     this.papers.push(buildFrontPage(this));
     this.prevCounts = { ...this.counts };
@@ -1627,7 +1648,8 @@ export class Sim {
       if (c.activity === "protest") c.stress += 0.004;
       c.stress = clamp(c.stress, 0.03, 0.97);
       const wealthTerm = P.money ? clamp((c.wealth - 35) / 5, -14, 6) : clamp((c.favors + (c.reputation - 50) / 8) / 2, -8, 5);
-      const cityTerm = (this.metrics.safety - 60) * 0.12 + (this.metrics.environment - 60) * 0.08 + (c.traits.trust - 0.55) * 20;
+      const unemp = this.daySamples.length ? this.daySamples[this.daySamples.length - 1].unemployment : 0.06;
+      const cityTerm = (0.06 - unemp) * 60 + (this.metrics.safety - 60) * 0.12 + (this.metrics.environment - 60) * 0.08 + (c.traits.trust - 0.55) * 20;
       const target = 45 + (0.3 - c.stress) * 45 + wealthTerm + cityTerm;
       c.mood = clamp(c.mood + (target - c.mood) * 0.03);
       const tTarget = 0.3 + this.culture.honesty / 400 + this.culture.community / 400 + (this.metrics.safety - 50) / 500;

@@ -509,6 +509,9 @@ export function addBuilding(
     closed: false,
     born,
     seed: rng.int(0, 1e6),
+    level: district === "downtown" ? 3 : district === "suburbs" || district === "university" ? 2 : district === "industrial" ? 1 : 2,
+    condition: 0.7 + rng.range(0, 0.25),
+    levelStreak: 0,
   };
   world.buildings.push(b);
   for (let ty = y; ty < y + h; ty++) {

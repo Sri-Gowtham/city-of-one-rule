@@ -62,6 +62,7 @@ export function TrendsPanel({ sim }: { sim: Sim }) {
           </div>
         </div>
       )}
+      {sim.daySamples.length > 1 && <GrowthChart sim={sim} />}
       <h3 className="sub">Culture memory</h3>
       <p className="muted small">Culture changes slowly and outlives the rules that shaped it.</p>
       <div className="culture-grid">
@@ -86,5 +87,55 @@ export function TrendsPanel({ sim }: { sim: Sim }) {
         })}
       </div>
     </section>
+  );
+}
+
+function GrowthChart({ sim }: { sim: Sim }) {
+  const d = sim.daySamples;
+  const GW = 900;
+  const GH = 180;
+  const x = (i: number) => (i / Math.max(1, d.length - 1)) * GW;
+  const pops = d.map((s) => s.population);
+  const lo = Math.min(...pops) * 0.98;
+  const hi = Math.max(...pops) * 1.02;
+  const series: { label: string; color: string; v: (s: (typeof d)[number]) => number }[] = [
+    { label: "Population", color: "#f4f1e8", v: (s) => ((s.population - lo) / Math.max(1, hi - lo)) * 100 },
+    { label: "Education", color: "#5aa9e6", v: (s) => s.education * 100 },
+    { label: "Unemployment", color: "#ff7b6b", v: (s) => s.unemployment * 300 },
+    { label: "Land value", color: "#e9c46a", v: (s) => s.landValue },
+  ];
+  const y = (v: number) => GH - (Math.max(0, Math.min(100, v)) / 100) * GH;
+  const last = d[d.length - 1];
+  return (
+    <>
+      <h3 className="sub">City growth</h3>
+      <p className="muted small">
+        {last.population.toLocaleString()} residents · education {Math.round(last.education * 100)}% · {(last.unemployment * 100).toFixed(1)}%
+        unemployed · land value {Math.round(last.landValue)}. Population is scaled to its own range; unemployment is shown ×3.
+      </p>
+      <div className="chart-wrap">
+        <svg viewBox={`-10 -10 ${GW + 20} ${GH + 20}`} className="chart">
+          {[0, 50, 100].map((v) => (
+            <line key={v} x1={0} x2={GW} y1={y(v)} y2={y(v)} className="grid" />
+          ))}
+          {series.map((s) => (
+            <polyline
+              key={s.label}
+              points={d.map((p, i) => `${x(i).toFixed(1)},${y(s.v(p)).toFixed(1)}`).join(" ")}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={2.2}
+            />
+          ))}
+        </svg>
+        <div className="legend">
+          {series.map((s) => (
+            <span key={s.label}>
+              <i style={{ background: s.color }} /> {s.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

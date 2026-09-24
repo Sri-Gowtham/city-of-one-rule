@@ -288,6 +288,9 @@ export interface Building {
   closed: boolean;
   born: number;
   seed: number;
+  level: number;
+  condition: number;
+  levelStreak: number;
 }
 
 export interface Tree {
@@ -421,4 +424,37 @@ export interface EraSnapshot {
   culture: Record<CultureKey, number>;
   counts: Record<string, number>;
   flags: string[];
+}
+
+export interface Cohorts {
+  children: number;
+  students: number;
+  young: number;
+  adults: number;
+  elderly: number;
+}
+
+export interface DistrictState {
+  id: DistrictId;
+  pop: Cohorts;
+  housing: number;
+  jobs: number;
+  education: number;
+  skill: number;
+  income: number;
+  landValue: number;
+  unemployment: number;
+  attract: number;
+  netMigration: number;
+  condition: number;
+}
+
+export interface CityDaySample {
+  era: number;
+  population: number;
+  jobs: number;
+  unemployment: number;
+  education: number;
+  landValue: number;
+  income: number;
 }

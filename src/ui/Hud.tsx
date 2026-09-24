@@ -2,6 +2,7 @@ import type { Sim } from "../sim/engine";
 import { ruleById } from "../sim/rules";
 import { METRIC_KEYS } from "../sim/types";
 import { METRIC_META, clock } from "./labels";
+import { citySample } from "../sim/evolution";
 
 export type Tab = "city" | "people" | "businesses" | "trends" | "news";
 
@@ -15,7 +16,8 @@ export function TopBar({ sim, muted, onMute }: { sim: Sim; muted: boolean; onMut
         <div>
           <div className="brand-name">CITY OF ONE RULE</div>
           <div className="brand-sub">
-            Day {Math.max(1, sim.era)} / {sim.totalEras}
+            Day {Math.max(1, sim.era)}
+            {sim.endless ? "" : ` / ${sim.totalEras}`}
             {running && <span className="clock"> · {clock(sim.hour)}</span>}
           </div>
         </div>
@@ -24,6 +26,7 @@ export function TopBar({ sim, muted, onMute }: { sim: Sim; muted: boolean; onMut
         <span className="rule-chip-label">ACTIVE RULE</span>
         <span className="rule-chip-title">{rule ? rule.title : "None yet"}</span>
       </div>
+      <CityStats sim={sim} />
       <button className="icon-btn mute" title={muted ? "Unmute" : "Mute"} onClick={onMute}>
         {muted ? "🔇" : "🔊"}
       </button>
@@ -50,6 +53,26 @@ export function TopBar({ sim, muted, onMute }: { sim: Sim; muted: boolean; onMut
         })}
       </div>
     </header>
+  );
+}
+
+function CityStats({ sim }: { sim: Sim }) {
+  const s = citySample(sim);
+  const first = sim.daySamples[0];
+  const dp = first ? s.population - first.population : 0;
+  return (
+    <div className="city-stats" title="Residents · unemployment · average land value">
+      <span>
+        👥 <b>{s.population.toLocaleString()}</b>
+        {dp !== 0 && <em className={dp > 0 ? "up" : "down"}>{dp > 0 ? `+${dp.toLocaleString()}` : dp.toLocaleString()}</em>}
+      </span>
+      <span>
+        💼 <b>{(s.unemployment * 100).toFixed(1)}%</b> jobless
+      </span>
+      <span>
+        🏠 <b>{Math.round(s.landValue)}</b> land
+      </span>
+    </div>
   );
 }
 

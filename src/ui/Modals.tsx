@@ -7,7 +7,7 @@ import { useState } from "react";
 import { METRIC_META } from "./labels";
 import { play } from "./audio";
 
-export function RuleDraft({ sim, onChoose, onPeek }: { sim: Sim; onChoose: (id: RuleId) => void; onPeek: () => void }) {
+export function RuleDraft({ sim, onChoose, onPeek, onEnd }: { sim: Sim; onChoose: (id: RuleId) => void; onPeek: () => void; onEnd: () => void }) {
   const next = sim.era + 1;
   const keep = sim.activeRule;
   const locked = sim.lockedRules();
@@ -15,7 +15,8 @@ export function RuleDraft({ sim, onChoose, onPeek }: { sim: Sim; onChoose: (id: 
     <div className="modal-wrap">
       <div className="draft">
         <div className="draft-kicker">
-          DAY {next} OF {sim.totalEras}
+          DAY {next}
+          {sim.endless ? " · ENDLESS TERM" : ` OF ${sim.totalEras}`}
         </div>
         <h1>Choose one rule</h1>
         {sim.era === 0 ? (
@@ -62,6 +63,11 @@ export function RuleDraft({ sim, onChoose, onPeek }: { sim: Sim; onChoose: (id: 
             </div>
           ) : (
             <div className="locked">All {RULES.length} rules discovered.</div>
+          )}
+          {sim.endless && sim.era > 0 && (
+            <button className="ghost" onClick={onEnd}>
+              End term & see the report
+            </button>
           )}
           <button className="ghost" onClick={onPeek}>
             Look at the city first

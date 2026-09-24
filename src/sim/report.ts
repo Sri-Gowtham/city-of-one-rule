@@ -1,6 +1,7 @@
 import type { Sim } from "./engine";
 import { ruleById } from "./rules";
 import { CULTURE_KEYS } from "./types";
+import { population } from "./evolution";
 import type { CultureKey, MetricKey } from "./types";
 
 const HIGH: Record<CultureKey, string> = {
@@ -61,12 +62,14 @@ export function buildReport(sim: Sim): SocietyReport {
   if (!developments.length) developments.push("The city changed quietly, without landmark events");
 
   const m = sim.metrics;
-  const population = Math.round(
-    4000 + m.happiness * 3 + m.economy * 2 + d.businessesCreated * 25 - d.closed * 30 + sim.world.trees.length * 0.5,
-  );
+  const pop = population(sim);
+  const startPop = sim.daySamples[0]?.population ?? pop;
+  if (Math.abs(pop - startPop) > startPop * 0.03) developments.unshift(`Population ${pop > startPop ? "grew" : "fell"} from ${startPop.toLocaleString()} to ${pop.toLocaleString()}`);
+  const upgraded = sim.world.buildings.filter((b) => b.level >= 4).length;
+  if (upgraded) developments.push(`${upgraded} buildings redeveloped to high-value levels`);
 
   return {
-    population,
+    population: pop,
     metrics: { ...m },
     traits,
     developments,

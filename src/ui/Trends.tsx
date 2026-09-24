@@ -38,7 +38,7 @@ export function TrendsPanel({ sim }: { sim: Sim }) {
               <g key={h.era}>
                 <line x1={x(h.era, 6)} x2={x(h.era, 6)} y1={-6} y2={H} className="day-line" />
                 <text x={x(h.era, 6) + 4} y={-10} className="day-label">
-                  D{h.era} · {ruleById(h.ruleId).title.slice(0, 28)}
+                  D{h.era}
                 </text>
               </g>
             ))}
@@ -50,6 +50,13 @@ export function TrendsPanel({ sim }: { sim: Sim }) {
             {METRIC_KEYS.map((k) => (
               <span key={k}>
                 <i style={{ background: METRIC_META[k].color }} /> {METRIC_META[k].label} {Math.round(sim.metrics[k])}
+              </span>
+            ))}
+          </div>
+          <div className="day-key">
+            {sim.history.map((h) => (
+              <span key={h.era}>
+                <b>D{h.era}</b> {ruleById(h.ruleId).title}
               </span>
             ))}
           </div>

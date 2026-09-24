@@ -3,17 +3,24 @@ import { TH, TW, hash, iso, line, poly, shade } from "./draw";
 import type { Pt } from "./draw";
 
 export interface BuildCtx {
-  night: number;
-  hour: number;
-  time: number;
-  era: number;
-  lit: Pt[][];
-  glows: { x: number; y: number; r: number; color: string }[];
+  windows: Pt[][];
   emitters: { x: number; y: number; kind: "smoke" | "steam" }[];
-  working: boolean;
-  highlight: 0 | 1 | 2;
-  community: number;
+  lamps: Pt[];
 }
+
+export interface Sprite {
+  canvas: HTMLCanvasElement;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  windows: Pt[][];
+  emitters: BuildCtx["emitters"];
+  lamps: Pt[];
+  key: string;
+}
+
+type Material = "brick" | "concrete" | "stone" | "siding" | "glass" | "metal";
 
 const FLOOR_H: Partial<Record<BuildingKind, number>> = {
   house: 18,
@@ -27,16 +34,41 @@ const FLOOR_H: Partial<Record<BuildingKind, number>> = {
   mall: 17,
 };
 
+const MATERIAL: Record<BuildingKind, Material> = {
+  house: "siding",
+  apartment: "concrete",
+  shop: "brick",
+  mall: "concrete",
+  cafe: "brick",
+  restaurant: "brick",
+  grocery: "concrete",
+  office: "glass",
+  bank: "stone",
+  media: "concrete",
+  techco: "glass",
+  cinema: "concrete",
+  factory: "brick",
+  warehouse: "metal",
+  power: "concrete",
+  school: "brick",
+  university: "brick",
+  library: "stone",
+  lab: "concrete",
+  community: "brick",
+  cityhall: "stone",
+  kiosk: "siding",
+  boutique: "stone",
+  repair: "brick",
+  workshop: "siding",
+};
+
 const EMBLEM: Partial<Record<BuildingKind, string>> = {
   cafe: "☕",
   restaurant: "🍝",
   shop: "🛍️",
-  mall: "🛒",
-  grocery: "🛒",
   boutique: "💎",
   repair: "🔧",
   workshop: "🛠️",
-  kiosk: "🍦",
   cinema: "🎬",
   library: "📚",
   lab: "🔬",
@@ -50,14 +82,7 @@ const EMBLEM: Partial<Record<BuildingKind, string>> = {
   university: "🎓",
 };
 
-const STOREFRONT: ReadonlySet<BuildingKind> = new Set<BuildingKind>([
-  "shop",
-  "cafe",
-  "restaurant",
-  "boutique",
-  "repair",
-  "workshop",
-]);
+const STOREFRONT: ReadonlySet<BuildingKind> = new Set<BuildingKind>(["shop", "cafe", "restaurant", "boutique", "repair", "workshop"]);
 
 export function buildingHeight(b: Building): number {
   return b.floors * (FLOOR_H[b.kind] ?? 15);
@@ -67,14 +92,6 @@ export function buildingHull(b: Building): Pt[] {
   const H = buildingHeight(b) + (b.kind === "cityhall" ? 60 : b.kind === "house" ? 14 : 8);
   const { x, y, w, h } = b;
   return [iso(x, y + h), iso(x + w, y + h), iso(x + w, y), iso(x + w, y, H), iso(x, y, H), iso(x, y + h, H)];
-}
-
-function litProb(hour: number, kind: BuildingKind): number {
-  const home = kind === "house" || kind === "apartment";
-  if (hour >= 18 && hour < 23) return home ? 0.7 : 0.35;
-  if (hour >= 23) return home ? 0.3 : 0.15;
-  if (hour < 7.5) return home ? 0.45 : 0.1;
-  return 0;
 }
 
 export function box(
@@ -96,13 +113,15 @@ export function box(
   poly(ctx, [W, S, up(S), up(W)], shade(color, -0.04));
   poly(ctx, [S, E, up(E), up(S)], shade(color, -0.25));
   poly(ctx, [up(N), up(E), up(S), up(W)], top ?? shade(color, 0.12));
+  line(ctx, up(W), up(S), "rgba(255,255,255,0.18)", 0.6);
+  line(ctx, up(S), up(E), "rgba(255,255,255,0.1)", 0.6);
 }
 
 function faceText(ctx: CanvasRenderingContext2D, text: string, p: Pt, face: "L" | "R", size: number, color: string, weight = 700) {
   ctx.save();
   ctx.translate(p[0], p[1]);
   ctx.transform(1, face === "L" ? 0.5 : -0.5, 0, 1, 0, 0);
-  ctx.font = `${weight} ${size}px 'Segoe UI', system-ui, sans-serif`;
+  ctx.font = `${weight} ${size}px 'Inter', 'Segoe UI', system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = color;
@@ -115,6 +134,46 @@ function emoji(ctx: CanvasRenderingContext2D, e: string, p: Pt, size: number) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(e, p[0], p[1]);
+}
+
+const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+function inset(q: Pt[], k: number): Pt[] {
+  const c: Pt = [(q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4];
+  return q.map((p) => lerp(p, c, k));
+}
+
+export function buildSprite(b: Building, scale: number): Sprite {
+  const hull = buildingHull(b);
+  const xs = hull.map((p) => p[0]);
+  const ys = hull.map((p) => p[1]);
+  const minX = Math.min(...xs) - 34;
+  const maxX = Math.max(...xs) + 34;
+  const minY = Math.min(...ys) - 70;
+  const maxY = Math.max(...ys) + 16;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil((maxX - minX) * scale);
+  canvas.height = Math.ceil((maxY - minY) * scale);
+  const ctx = canvas.getContext("2d")!;
+  ctx.scale(scale, scale);
+  ctx.translate(-minX, -minY);
+  const bc: BuildCtx = { windows: [], emitters: [], lamps: [] };
+  drawBuilding(ctx, b, bc);
+  return {
+    canvas,
+    x: minX,
+    y: minY,
+    w: maxX - minX,
+    h: maxY - minY,
+    windows: bc.windows,
+    emitters: bc.emitters,
+    lamps: bc.lamps,
+    key: spriteKey(b),
+  };
+}
+
+export function spriteKey(b: Building): string {
+  return `${b.closed}|${b.shared}|${b.name}`;
 }
 
 export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: BuildCtx) {
@@ -142,109 +201,298 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
   const closed = b.closed;
   const wall = closed ? "#8c8782" : b.wall;
   const accent = closed ? "#6f6a66" : b.accent;
+  const mat = MATERIAL[kind];
+  const rnd = (...k: number[]) => hash(b.seed, ...k);
+  const faceLen = { L: w * 35.8, R: h * 35.8 };
 
-  poly(ctx, [S, E, [E[0] + 16, E[1] + 8], [S[0] + 16, S[1] + 8]], "rgba(20,30,20,0.16)");
-  poly(ctx, [W, S, up(S, H), up(W, H)], shade(wall, -0.03));
-  poly(ctx, [S, E, up(E, H), up(S, H)], shade(wall, -0.25));
-  line(ctx, S, up(S, H), "rgba(0,0,0,0.12)", 1);
+  // Forecourt paving and contact shadow
+  const pad = 0.14;
+  poly(ctx, [iso(x - pad, y - pad), iso(x + w + pad, y - pad), iso(x + w + pad, y + h + pad), iso(x - pad, y + h + pad)], "rgba(214,206,190,0.55)");
+  ctx.save();
+  ctx.filter = "blur(5px)";
+  poly(ctx, [S, E, [E[0] + 22, E[1] + 11], [S[0] + 22, S[1] + 11]], "rgba(15,25,20,0.28)");
+  poly(ctx, [iso(x - 0.05, y + h + 0.08), iso(x + w + 0.08, y + h + 0.08), iso(x + w + 0.08, y - 0.05)], undefined, "rgba(10,15,10,0.35)", 5);
+  ctx.restore();
 
-  const lp = litProb(bc.hour, kind) * (bc.night > 0.05 ? 1 : 0);
-  const windows = (
-    face: "L" | "R",
-    cols: number,
-    rows: number,
-    gw = 0.55,
-    gh = 0.45,
-    skipGround = false,
-    glassL = "#c3dcee",
-    glassR = "#8fb2cc",
-  ) => {
+  // Walls with light falloff
+  const leftFace: Pt[] = [W, S, up(S, H), up(W, H)];
+  const rightFace: Pt[] = [S, E, up(E, H), up(S, H)];
+  poly(ctx, leftFace, shade(wall, -0.03));
+  poly(ctx, rightFace, shade(wall, -0.26));
+  for (const [face, dark] of [
+    [leftFace, 0.05],
+    [rightFace, 0.1],
+  ] as const) {
+    const g = ctx.createLinearGradient(face[0][0], face[0][1], face[3][0], face[3][1]);
+    g.addColorStop(0, `rgba(0,0,0,${0.16 + dark})`);
+    g.addColorStop(0.18, "rgba(0,0,0,0.02)");
+    g.addColorStop(1, "rgba(255,245,225,0.08)");
+    poly(ctx, face, g);
+  }
+  const hg = ctx.createLinearGradient(S[0], S[1], E[0], E[1]);
+  hg.addColorStop(0, "rgba(0,0,0,0)");
+  hg.addColorStop(1, "rgba(0,0,0,0.12)");
+  poly(ctx, rightFace, hg);
+
+  // Surface material
+  const texture = (f: (u: number, v: number) => Pt, len: number) => {
+    ctx.beginPath();
+    const addLine = (a: Pt, c: Pt) => {
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(c[0], c[1]);
+    };
+    if (mat === "brick" || mat === "stone" || mat === "siding") {
+      const course = mat === "brick" ? 3.6 : mat === "stone" ? 7 : 3.2;
+      const joint = mat === "brick" ? 8 : 15;
+      let row = 0;
+      for (let z = course; z < H; z += course, row++) {
+        const v = z / H;
+        addLine(f(0, v), f(1, v));
+        if (mat !== "siding" && row % 2 === 0) {
+          for (let s = (row % 4 === 0 ? 0 : joint / 2) + joint; s < len; s += joint) {
+            const u = s / len;
+            addLine(f(u, v), f(u, v - course / H));
+          }
+        }
+      }
+      ctx.strokeStyle = mat === "brick" ? "rgba(60,30,20,0.16)" : mat === "stone" ? "rgba(70,60,45,0.13)" : "rgba(0,0,0,0.1)";
+    } else if (mat === "concrete") {
+      const panels = Math.max(2, Math.round(len / 18));
+      for (let i = 1; i < panels; i++) addLine(f(i / panels, 0), f(i / panels, 1));
+      for (let fl = 1; fl < b.floors; fl++) addLine(f(0, fl / b.floors), f(1, fl / b.floors));
+      ctx.strokeStyle = "rgba(0,0,0,0.1)";
+    } else if (mat === "metal") {
+      for (let s = 3; s < len; s += 3) addLine(f(s / len, 0), f(s / len, 1));
+      ctx.strokeStyle = "rgba(0,0,0,0.09)";
+    } else {
+      for (let fl = 1; fl <= b.floors; fl++) addLine(f(0, fl / b.floors - 0.02), f(1, fl / b.floors - 0.02));
+      ctx.strokeStyle = "rgba(40,55,70,0.35)";
+    }
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+  };
+  texture(L, faceLen.L);
+  texture(R, faceLen.R);
+
+  // Weathering: rain streaks and base grime
+  for (const [f, side] of [
+    [L, 0],
+    [R, 1],
+  ] as const) {
+    const streaks = 2 + Math.floor(rnd(side, 9) * 4);
+    for (let k = 0; k < streaks; k++) {
+      const u = 0.05 + rnd(side, k, 1) * 0.9;
+      const top = f(u, 1);
+      const bot = f(u, 1 - (0.15 + rnd(side, k, 2) * 0.35));
+      const g = ctx.createLinearGradient(top[0], top[1], bot[0], bot[1]);
+      g.addColorStop(0, "rgba(40,35,30,0.16)");
+      g.addColorStop(1, "rgba(40,35,30,0)");
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 1 + rnd(side, k, 3) * 1.8;
+      ctx.beginPath();
+      ctx.moveTo(top[0], top[1]);
+      ctx.lineTo(bot[0], bot[1]);
+      ctx.stroke();
+    }
+  }
+  line(ctx, S, up(S, H), "rgba(0,0,0,0.18)", 1);
+  line(ctx, up(W, H), up(S, H), "rgba(255,255,255,0.25)", 0.8);
+
+  // Windows: frame, glass with sky reflection, sill, mullions
+  const windows = (face: "L" | "R", cols: number, rows: number, gw = 0.55, gh = 0.45, skipGround = false, tint?: string) => {
     const f = face === "L" ? L : R;
+    const len = face === "L" ? faceLen.L : faceLen.R;
     for (let r = skipGround ? 1 : 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cu = (c + 0.5) / cols;
         const hw = gw / cols / 2;
-        const q = quad(f, cu - hw, cu + hw, (r + 0.3) / rows, (r + 0.3 + gh) / rows);
+        const v0 = (r + 0.3) / rows;
+        const v1 = (r + 0.3 + gh) / rows;
+        const outer = quad(f, cu - hw, cu + hw, v0, v1);
         if (closed) {
-          poly(ctx, q, "#5d4a3a");
-          line(ctx, q[0], q[2], "#3b2f25", 1);
-          line(ctx, q[1], q[3], "#3b2f25", 1);
+          poly(ctx, outer, "#5d4a3a");
+          line(ctx, outer[0], outer[2], "#3b2f25", 1);
+          line(ctx, outer[1], outer[3], "#3b2f25", 1);
           continue;
         }
-        const on = lp > 0 && hash(b.seed, face === "L" ? 1 : 2, r, c, Math.floor(bc.hour)) < lp;
-        poly(ctx, q, on ? "#f7d58c" : face === "L" ? glassL : glassR);
-        if (on) bc.lit.push(q);
+        poly(ctx, outer, mat === "glass" ? "#3e4c5c" : "#e9e4d8");
+        const glass = inset(outer, 0.16);
+        const g = ctx.createLinearGradient(glass[3][0], glass[3][1], glass[0][0], glass[0][1]);
+        const sky = tint ?? (face === "L" ? "#bcd6ea" : "#8fb0c8");
+        g.addColorStop(0, sky);
+        g.addColorStop(0.55, shade(sky, -0.28));
+        g.addColorStop(1, shade(sky, -0.5));
+        poly(ctx, glass, g);
+        poly(ctx, [glass[3], lerp(glass[3], glass[2], 0.45), lerp(glass[0], glass[1], 0.15)], "rgba(255,255,255,0.22)");
+        const widthPx = gw * (len / cols);
+        if (widthPx > 7) line(ctx, lerp(glass[0], glass[1], 0.5), lerp(glass[3], glass[2], 0.5), "rgba(40,45,55,0.55)", 0.7);
+        if (mat !== "glass") line(ctx, lerp(outer[0], outer[1], -0.08), lerp(outer[1], outer[0], -0.08), "rgba(245,240,230,0.9)", 1.3);
+        bc.windows.push(glass);
       }
     }
   };
+
   const flatRoof = (color: string) => {
     const top: Pt[] = [up(N, H), up(E, H), up(S, H), up(W, H)];
     poly(ctx, top, color);
-    const inset = (p: Pt, c: Pt): Pt => [p[0] + (c[0] - p[0]) * 0.1, p[1] + (c[1] - p[1]) * 0.1];
+    for (let k = 0; k < 40; k++) {
+      const p = iso(x + 0.1 + rnd(k, 1) * (w - 0.2), y + 0.1 + rnd(k, 2) * (h - 0.2), H);
+      ctx.fillStyle = rnd(k, 3) > 0.5 ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)";
+      ctx.fillRect(p[0], p[1], 1.2, 1.2);
+    }
     const ctr = iso(x + w / 2, y + h / 2, H);
-    poly(ctx, top.map((p) => inset(p, ctr)), undefined, "rgba(0,0,0,0.12)", 1);
+    const inner = top.map((p) => lerp(p, ctr, 0.08));
+    poly(ctx, inner, undefined, "rgba(0,0,0,0.18)", 1);
+    line(ctx, top[3], top[2], "rgba(255,255,255,0.35)", 1.2);
+    line(ctx, top[2], top[1], "rgba(255,255,255,0.2)", 1.2);
+    if (w * h >= 4 && kind !== "cityhall") {
+      box(ctx, x + w * 0.62, y + h * 0.18, 0.28, 0.2, H, 7, "#9aa1a8");
+      box(ctx, x + w * 0.2, y + h * 0.55, 0.12, 0.12, H, 5, "#7d858e");
+      const vent = iso(x + w * 0.35, y + h * 0.3, H);
+      ctx.fillStyle = "#6b737c";
+      ctx.fillRect(vent[0] - 1, vent[1] - 6, 2, 6);
+    }
   };
+
+  const canopy = (u = 0.5) => {
+    const out: Pt = [(-TW / 2) * 0.16, (TH / 2) * 0.16];
+    const vTop = Math.min(0.9, 20 / H);
+    const a0 = L(u - 0.12, vTop);
+    const a1 = L(u + 0.12, vTop);
+    poly(ctx, quad(L, u - 0.08, u + 0.08, 0, vTop * 0.9), "#3a3f47");
+    const gl = inset(quad(L, u - 0.08, u + 0.08, 0, vTop * 0.9), 0.12);
+    poly(ctx, gl, "#8fb4cc");
+    line(ctx, lerp(gl[0], gl[1], 0.5), lerp(gl[3], gl[2], 0.5), "#3a3f47", 0.8);
+    poly(ctx, [a0, a1, [a1[0] + out[0], a1[1] + out[1]], [a0[0] + out[0], a0[1] + out[1]]], "#d9dde2", "rgba(0,0,0,0.25)", 0.6);
+    for (const uu of [u - 0.15, u + 0.15]) {
+      const p = L(uu, vTop * 0.75);
+      ctx.fillStyle = "#2b2f36";
+      ctx.fillRect(p[0] - 1, p[1] - 2, 2, 3);
+      ctx.fillStyle = "#ffe0a0";
+      ctx.fillRect(p[0] - 0.8, p[1] - 1.5, 1.6, 1.5);
+      bc.lamps.push(p);
+    }
+  };
+
   const storefront = (va: number) => {
-    const glass = quad(L, 0.12, 0.88, 0.04, va * 0.9);
-    poly(ctx, glass, closed ? "#4a3f36" : bc.night > 0.1 && bc.hour < 22 ? "#f5d189" : "#b8d4e6");
-    if (!closed && bc.night > 0.1 && bc.hour < 22) bc.lit.push(glass);
-    poly(ctx, quad(L, 0.44, 0.56, 0.04, va * 0.82), shade(accent, -0.3));
+    const frame = quad(L, 0.1, 0.9, 0.03, va * 0.92);
+    poly(ctx, frame, "#2e2a27");
+    const glass = inset(frame, 0.06);
+    const g = ctx.createLinearGradient(glass[3][0], glass[3][1], glass[0][0], glass[0][1]);
+    g.addColorStop(0, closed ? "#4a3f36" : "#c9dcea");
+    g.addColorStop(1, closed ? "#2c241e" : "#6f8799");
+    poly(ctx, glass, g);
+    if (!closed) {
+      poly(ctx, [glass[3], lerp(glass[3], glass[2], 0.35), lerp(glass[0], glass[1], 0.1)], "rgba(255,255,255,0.2)");
+      bc.windows.push(glass);
+    }
+    poly(ctx, quad(L, 0.44, 0.56, 0.03, va * 0.8), shade(accent, -0.35));
+    line(ctx, L(0.55, va * 0.4), L(0.55, va * 0.46), "#d9b44a", 1.2);
     if (closed) {
       line(ctx, glass[0], glass[2], "#2b221b", 1.5);
       line(ctx, glass[1], glass[3], "#2b221b", 1.5);
       return;
     }
-    const out: Pt = [(-TW / 2) * 0.22, (TH / 2) * 0.22];
-    const n = 6;
+    const out: Pt = [(-TW / 2) * 0.24, (TH / 2) * 0.24];
+    const n = 7;
     for (let k = 0; k < n; k++) {
       const u0 = 0.06 + (k * 0.88) / n;
       const u1 = 0.06 + ((k + 1) * 0.88) / n;
       const a0 = L(u0, va);
       const a1 = L(u1, va);
-      poly(
-        ctx,
-        [a0, a1, [a1[0] + out[0], a1[1] + out[1] + 5], [a0[0] + out[0], a0[1] + out[1] + 5]],
-        k % 2 ? "#f6f1e7" : accent,
-      );
+      poly(ctx, [a0, a1, [a1[0] + out[0], a1[1] + out[1] + 6], [a0[0] + out[0], a0[1] + out[1] + 6]], k % 2 ? "#f6f1e7" : accent);
     }
+    const e0 = L(0.06, va);
+    const e1 = L(0.94, va);
+    line(ctx, [e0[0] + out[0], e0[1] + out[1] + 6], [e1[0] + out[0], e1[1] + out[1] + 6], "rgba(0,0,0,0.3)", 1);
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.filter = "blur(2px)";
+    poly(ctx, [L(0.06, va - 0.02), L(0.94, va - 0.02), L(0.94, va - 0.2), L(0.06, va - 0.2)], "#000");
+    ctx.restore();
   };
 
   switch (kind) {
     case "house": {
-      windows("R", 1, 1, 0.4, 0.45);
-      poly(ctx, quad(L, 0.2, 0.42, 0, 0.62), shade(b.roof, -0.35));
-      windows("L", 1, 1, 0.3, 0.42);
+      windows("R", 1, 1, 0.42, 0.45);
+      poly(ctx, quad(L, 0.2, 0.4, 0, 0.62), "#f1ece2");
+      poly(ctx, quad(L, 0.22, 0.38, 0, 0.58), shade(b.roof, -0.35));
+      ctx.fillStyle = "#d9b44a";
+      const knob = L(0.35, 0.3);
+      ctx.fillRect(knob[0] - 0.7, knob[1] - 0.7, 1.4, 1.4);
+      windows("L", 1, 1, 0.32, 0.42);
+      const lamp = L(0.44, 0.55);
+      bc.lamps.push(lamp);
       const rh = 15;
       const roof = b.shared ? "#35a39a" : b.roof;
       const A = iso(x, y + h / 2, H + rh);
       const B = iso(x + w, y + h / 2, H + rh);
-      poly(ctx, [up(N, H), up(E, H), B, A], shade(roof, -0.2));
-      poly(ctx, [up(W, H), up(S, H), B, A], roof);
-      poly(ctx, [up(E, H), up(S, H), B], shade(wall, -0.32));
-      box(ctx, x + 0.62, y + 0.2, 0.14, 0.14, H + 6, 12, "#7b5a48");
+      const eW = iso(x - 0.06, y + h + 0.06, H - 1);
+      const eS = iso(x + w + 0.06, y + h + 0.06, H - 1);
+      poly(ctx, [up(N, H), up(E, H), B, A], shade(roof, -0.25));
+      poly(ctx, [eW, eS, B, A], roof);
+      ctx.beginPath();
+      for (let t = 0.14; t < 1; t += 0.14) {
+        const a = lerp(eW, A, t);
+        const c = lerp(eS, B, t);
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(c[0], c[1]);
+      }
+      ctx.strokeStyle = "rgba(0,0,0,0.18)";
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+      line(ctx, eW, eS, "rgba(0,0,0,0.35)", 1.2);
+      line(ctx, A, B, shade(roof, 0.2), 1.4);
+      poly(ctx, [up(E, H), up(S, H), B], shade(wall, -0.3));
+      box(ctx, x + 0.62, y + 0.2, 0.14, 0.14, H + 6, 13, "#8a5a45");
       break;
     }
     case "apartment": {
       windows("L", w * 3, b.floors, 0.5, 0.42);
       windows("R", h * 3, b.floors, 0.5, 0.42);
-      for (let r = 1; r < b.floors; r++) line(ctx, L(0.05, (r + 0.22) / b.floors), L(0.95, (r + 0.22) / b.floors), "rgba(60,50,40,0.55)", 1.5);
+      const out: Pt = [(-TW / 2) * 0.1, (TH / 2) * 0.1];
+      for (let r = 1; r < b.floors; r++) {
+        for (let c = 0; c < w * 3; c += 2) {
+          const cu = (c + 0.5) / (w * 3);
+          const a = L(cu - 0.12, (r + 0.25) / b.floors);
+          const d = L(cu + 0.12, (r + 0.25) / b.floors);
+          poly(ctx, [a, d, [d[0] + out[0], d[1] + out[1]], [a[0] + out[0], a[1] + out[1]]], "#cfc9bd", "rgba(0,0,0,0.25)", 0.5);
+          line(ctx, [a[0] + out[0], a[1] + out[1] - 5], [d[0] + out[0], d[1] + out[1] - 5], "rgba(60,60,60,0.7)", 0.8);
+        }
+      }
+      if (w > 1) canopy();
       flatRoof(shade(b.roof, 0.1));
-      box(ctx, x + w * 0.62, y + h * 0.2, 0.25, 0.25, H, 12, "#9aa3ad");
+      box(ctx, x + w * 0.62, y + h * 0.55, 0.25, 0.25, H, 12, "#9aa3ad");
       break;
     }
     case "office":
     case "techco": {
-      const cols = w * 3;
-      windows("L", cols, b.floors, 0.82, 0.62, false, kind === "techco" ? "#bff0ea" : "#d5e7f5", kind === "techco" ? "#7cc9c1" : "#93b6d3");
-      windows("R", h * 3, b.floors, 0.82, 0.62, false, kind === "techco" ? "#bff0ea" : "#d5e7f5", kind === "techco" ? "#7cc9c1" : "#93b6d3");
-      flatRoof(kind === "techco" ? "#79b86b" : shade(b.roof, 0.15));
-      if (kind === "office") {
+      const tint = kind === "techco" ? "#a9e6df" : "#b7d3e8";
+      windows("L", w * 3, b.floors, 0.9, 0.7, false, tint);
+      windows("R", h * 3, b.floors, 0.9, 0.7, false, shade(tint, -0.15));
+      const sky = ctx.createLinearGradient(up(W, H)[0], up(W, H)[1], S[0], S[1]);
+      sky.addColorStop(0, "rgba(255,255,255,0.14)");
+      sky.addColorStop(0.5, "rgba(255,255,255,0)");
+      sky.addColorStop(1, "rgba(255,255,255,0.06)");
+      poly(ctx, leftFace, sky);
+      if (w > 1) canopy();
+      if (kind === "techco") {
+        flatRoof("#8a9a86");
+        const ctr = iso(x + w / 2, y + h / 2, H);
+        for (let k = 0; k < 14; k++) {
+          const p = iso(x + 0.2 + rnd(k, 5) * (w - 0.4), y + 0.2 + rnd(k, 6) * (h - 0.4), H);
+          ctx.fillStyle = k % 3 ? "#5e9a55" : "#7cb86b";
+          ctx.beginPath();
+          ctx.arc(p[0], p[1] - 2, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        emoji(ctx, EMBLEM.techco!, [ctr[0], ctr[1] - 12], 12);
+      } else {
+        flatRoof(shade(b.roof, 0.15));
         const t = iso(x + w * 0.7, y + h * 0.3, H);
         line(ctx, t, up(t, 24), "#555", 1.5);
-        ctx.fillStyle = Math.sin(bc.time * 3) > 0 ? "#ff5a4a" : "#7a2a24";
+        ctx.fillStyle = "#e0463a";
         ctx.fillRect(t[0] - 1.5, t[1] - 26, 3, 3);
-      } else {
-        emoji(ctx, EMBLEM.techco!, iso(x + w / 2, y + h / 2, H + 10), 14);
       }
       break;
     }
@@ -255,15 +503,18 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     case "repair":
     case "workshop": {
       const va = Math.min(0.7, 0.75 / b.floors);
-      if (b.floors > 1) {
-        windows("L", w * 2, b.floors, 0.5, 0.45, true);
-      }
+      if (b.floors > 1) windows("L", w * 2, b.floors, 0.5, 0.45, true);
       windows("R", h * 2, b.floors, 0.45, 0.45, false);
       storefront(va);
       flatRoof(shade(b.roof, 0.1));
-      if (kind === "boutique") line(ctx, up(W, H - 3), up(S, H - 3), "#d9b44a", 2);
-      emoji(ctx, EMBLEM[kind]!, closed ? L(0.5, 0.5) : [L(0.5, 1)[0], L(0.5, 1)[1] - 10], 13);
-      if (closed) faceText(ctx, "CLOSED", L(0.5, va * 0.5), "L", 9, "#ffdddd");
+      line(ctx, up(W, H - 2), up(S, H - 2), shade(accent, -0.1), 2.5);
+      if (kind === "boutique") line(ctx, up(W, H - 5), up(S, H - 5), "#d9b44a", 1.5);
+      const sign = L(0.5, Math.min(0.97, va + 0.18));
+      if (!closed) {
+        poly(ctx, [[sign[0] - 9, sign[1] - 7], [sign[0] + 9, sign[1] - 2], [sign[0] + 9, sign[1] + 9], [sign[0] - 9, sign[1] + 4]], "#f7f3ea", "rgba(0,0,0,0.3)", 0.6);
+        emoji(ctx, EMBLEM[kind]!, [sign[0], sign[1] + 1], 10);
+      } else faceText(ctx, "CLOSED", L(0.5, va * 0.5), "L", 8, "#ffdddd");
+      bc.lamps.push(L(0.08, va + 0.05), L(0.92, va + 0.05));
       break;
     }
     case "grocery":
@@ -272,48 +523,74 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       storefront(va);
       windows("R", h * 2, b.floors, 0.6, 0.4);
       const band = quad(L, 0.03, 0.97, 1 - 0.3 / b.floors, 1 - 0.05 / b.floors);
-      poly(ctx, band, accent);
-      faceText(ctx, b.name.toUpperCase(), L(0.5, 1 - 0.175 / b.floors), "L", 10, "#ffffff");
+      poly(ctx, band, accent, "rgba(0,0,0,0.25)", 0.8);
+      faceText(ctx, b.name.toUpperCase(), L(0.5, 1 - 0.175 / b.floors), "L", 9, "#ffffff", 800);
       flatRoof(shade(b.roof, 0.2));
-      box(ctx, x + w * 0.3, y + h * 0.25, 0.3, 0.3, H, 8, "#a8adb3");
+      for (let k = 0; k < 3; k++) box(ctx, x - 0.25 + k * 0.12, y + h + 0.15, 0.1, 0.18, 0, 3, "#b9bec4");
       break;
     }
     case "bank":
     case "cityhall": {
       windows("R", h * 2, b.floors, 0.45, 0.5);
+      const plinth = quad(L, 0, 1, 0, 0.08);
+      poly(ctx, plinth, shade(wall, -0.15));
       for (let k = 0; k < 7; k++) {
         const u = 0.1 + k * 0.13;
-        poly(ctx, quad(L, u, u + 0.05, 0.02, 0.78), "#f6f0e2");
-        poly(ctx, quad(L, u + 0.05, u + 0.07, 0.02, 0.78), "rgba(0,0,0,0.12)");
+        poly(ctx, quad(L, u, u + 0.055, 0.08, 0.76), "#f7f2e6");
+        poly(ctx, quad(L, u + 0.04, u + 0.065, 0.08, 0.76), "rgba(0,0,0,0.14)");
+        poly(ctx, quad(L, u - 0.01, u + 0.065, 0.74, 0.79), "#eee6d4");
       }
-      poly(ctx, quad(L, 0.44, 0.56, 0.02, 0.4), "#5a4636");
-      const a = L(0.18, 0.8);
-      const bb = L(0.82, 0.8);
-      const mid = L(0.5, 0.8);
-      poly(ctx, [a, bb, [mid[0], mid[1] - 18]], shade(wall, 0.1), "rgba(0,0,0,0.15)");
+      poly(ctx, quad(L, 0.43, 0.57, 0.08, 0.42), "#4a3a2c");
+      line(ctx, L(0.5, 0.08), L(0.5, 0.42), "#2e241b", 0.8);
+      poly(ctx, quad(L, 0.02, 0.98, 0.79, 0.86), shade(wall, 0.12), "rgba(0,0,0,0.15)", 0.6);
+      const a = L(0.16, 0.86);
+      const bb = L(0.84, 0.86);
+      const mid = L(0.5, 0.86);
+      poly(ctx, [a, bb, [mid[0], mid[1] - 18]], shade(wall, 0.12), "rgba(0,0,0,0.2)", 0.8);
+      for (let k = 0; k < 4; k++) {
+        const s0: Pt = lerp(L(0.3, 0), L(0.7, 0), 0);
+        const out: Pt = [(-TW / 2) * 0.05 * (k + 1), (TH / 2) * 0.05 * (k + 1)];
+        line(ctx, [s0[0] + out[0], s0[1] + out[1] - 2], [L(0.7, 0)[0] + out[0], L(0.7, 0)[1] + out[1] - 2], "rgba(0,0,0,0.18)", 1);
+      }
       flatRoof(shade(wall, 0.12));
+      bc.lamps.push(L(0.38, 0.35), L(0.62, 0.35));
       if (kind === "bank") {
         faceText(ctx, "$", [mid[0], mid[1] - 7], "L", 11, "#b58a1e", 800);
       } else {
         const c = iso(x + w / 2, y + h / 2, H);
         const rx = 26;
-        ctx.fillStyle = shade(wall, -0.05);
+        const drum = ctx.createLinearGradient(c[0] - rx, 0, c[0] + rx, 0);
+        drum.addColorStop(0, shade(wall, 0.05));
+        drum.addColorStop(1, shade(wall, -0.25));
+        ctx.fillStyle = drum;
         ctx.fillRect(c[0] - rx, c[1] - 16, rx * 2, 16);
+        for (let k = 0; k < 8; k++) {
+          const px = c[0] - rx + 4 + k * 6.3;
+          ctx.fillStyle = "rgba(60,80,100,0.55)";
+          ctx.fillRect(px, c[1] - 13, 2.5, 8);
+        }
         ctx.beginPath();
         ctx.ellipse(c[0], c[1] - 16, rx, rx * 0.45, 0, 0, Math.PI * 2);
         ctx.fillStyle = shade(wall, 0.1);
         ctx.fill();
         ctx.beginPath();
         ctx.ellipse(c[0], c[1] - 16, rx, rx * 0.95, 0, Math.PI, 0);
-        const g = ctx.createLinearGradient(c[0] - rx, 0, c[0] + rx, 0);
-        g.addColorStop(0, "#5fb5aa");
-        g.addColorStop(1, "#276f69");
+        const g = ctx.createRadialGradient(c[0] - 10, c[1] - 36, 2, c[0], c[1] - 20, rx * 1.2);
+        g.addColorStop(0, "#9ad3c9");
+        g.addColorStop(0.5, "#4f9d93");
+        g.addColorStop(1, "#1f5752");
         ctx.fillStyle = g;
         ctx.fill();
+        ctx.strokeStyle = "rgba(20,50,45,0.35)";
+        ctx.lineWidth = 0.7;
+        for (let k = -2; k <= 2; k++) {
+          ctx.beginPath();
+          ctx.ellipse(c[0], c[1] - 16, Math.abs(k) * rx * 0.3 + 0.1, rx * 0.95, 0, Math.PI, 0);
+          ctx.stroke();
+        }
         const top: Pt = [c[0], c[1] - 16 - rx * 0.95];
         line(ctx, top, [top[0], top[1] - 30], "#c9a33a", 2);
-        const wave = Math.sin(bc.time * 3) * 2;
-        poly(ctx, [[top[0], top[1] - 30], [top[0] + 16, top[1] - 27 + wave], [top[0], top[1] - 22]], "#d8433b");
+        poly(ctx, [[top[0], top[1] - 30], [top[0] + 16, top[1] - 26], [top[0], top[1] - 22]], "#d8433b");
       }
       break;
     }
@@ -323,15 +600,19 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       windows("R", h * 3, b.floors, 0.6, 0.5);
       if (kind === "media") {
         const band = quad(L, 0.05, 0.95, 1 - 0.35 / b.floors, 1 - 0.05 / b.floors);
-        poly(ctx, band, accent);
-        faceText(ctx, b.name.toUpperCase(), L(0.5, 1 - 0.2 / b.floors), "L", 10, "#fff");
+        poly(ctx, band, accent, "rgba(0,0,0,0.25)", 0.8);
+        faceText(ctx, b.name.toUpperCase(), L(0.5, 1 - 0.2 / b.floors), "L", 9, "#fff", 800);
       }
+      canopy();
       flatRoof(shade(b.roof, 0.3));
       const d = iso(x + w * 0.35, y + h * 0.35, H);
       line(ctx, d, up(d, 12), "#666", 2);
       ctx.beginPath();
       ctx.ellipse(d[0], d[1] - 16, 9, 5, -0.5, 0, Math.PI * 2);
-      ctx.fillStyle = "#e9eef2";
+      const dg = ctx.createLinearGradient(d[0] - 9, d[1] - 20, d[0] + 9, d[1] - 12);
+      dg.addColorStop(0, "#ffffff");
+      dg.addColorStop(1, "#a9b3bc");
+      ctx.fillStyle = dg;
       ctx.fill();
       ctx.strokeStyle = "#8a959f";
       ctx.stroke();
@@ -341,13 +622,14 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       windows("R", h * 2, b.floors, 0.4, 0.4);
       poly(ctx, quad(L, 0.3, 0.7, 0.02, 0.4), "#2a1f3a");
       const band = quad(L, 0.05, 0.95, 0.5, 0.78);
-      poly(ctx, band, closed ? "#555" : "#f5c84b");
+      poly(ctx, band, closed ? "#555" : "#f5c84b", "rgba(0,0,0,0.3)", 0.8);
       faceText(ctx, "CINEMA", L(0.5, 0.64), "L", 10, "#3c2d52", 800);
       if (!closed)
         for (let k = 0; k < 10; k++) {
           const p = L(0.08 + k * 0.093, 0.82);
-          ctx.fillStyle = Math.sin(bc.time * 6 + k) > 0 ? "#fff6c8" : "#c79a2a";
+          ctx.fillStyle = "#fff6c8";
           ctx.fillRect(p[0] - 1.5, p[1] - 1.5, 3, 3);
+          bc.lamps.push(p);
         }
       flatRoof(shade(b.roof, 0.15));
       break;
@@ -356,8 +638,21 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     case "warehouse":
     case "power": {
       if (kind === "warehouse") {
-        poly(ctx, quad(L, 0.22, 0.78, 0, 0.62), "#6d7784");
-        for (let k = 1; k < 6; k++) line(ctx, L(0.22, k * 0.1), L(0.78, k * 0.1), "rgba(0,0,0,0.2)", 1);
+        for (const u of [0.18, 0.55]) {
+          const door = quad(L, u, u + 0.28, 0, 0.62);
+          poly(ctx, door, "#6d7784");
+          ctx.beginPath();
+          for (let k = 1; k < 12; k++) {
+            const a = lerp(door[0], door[3], k / 12);
+            const c = lerp(door[1], door[2], k / 12);
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(c[0], c[1]);
+          }
+          ctx.strokeStyle = "rgba(0,0,0,0.22)";
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+          poly(ctx, quad(L, u - 0.02, u + 0.3, 0.62, 0.68), "#e0b64a");
+        }
         windows("R", h * 2, 1, 0.5, 0.25);
       } else {
         windows("L", w * 3, b.floors, 0.55, 0.35);
@@ -365,17 +660,30 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       }
       flatRoof(shade(b.roof, 0.2));
       if (kind === "factory") {
+        for (let k = 0; k < 3; k++) {
+          const x0 = x + (w * k) / 3;
+          const x1 = x + (w * (k + 1)) / 3;
+          const a = iso(x0, y + h, H);
+          const c = iso(x1, y + h, H);
+          const a2 = iso(x0, y, H);
+          const c2 = iso(x1, y, H);
+          const peakF: Pt = [c[0], c[1] - 10];
+          const peakB: Pt = [c2[0], c2[1] - 10];
+          poly(ctx, [a2, peakB, peakF, a], shade(b.roof, 0.05), "rgba(0,0,0,0.2)", 0.6);
+          poly(ctx, [c, peakF, peakB, c2], "#8fb0c8", "rgba(0,0,0,0.25)", 0.6);
+        }
         for (const [cx, cy] of [
           [x + w * 0.25, y + h * 0.2],
           [x + w * 0.6, y + h * 0.2],
         ]) {
-          box(ctx, cx, cy, 0.18, 0.18, H, 40, "#b8473a");
-          box(ctx, cx, cy, 0.18, 0.18, H + 18, 6, "#f1eee8");
-          if (bc.working && !closed) {
-            const tp = iso(cx + 0.09, cy + 0.09, H + 40);
-            bc.emitters.push({ x: tp[0], y: tp[1], kind: "smoke" });
-          }
+          box(ctx, cx, cy, 0.18, 0.18, H, 42, "#b8473a");
+          box(ctx, cx, cy, 0.18, 0.18, H + 20, 5, "#f1eee8");
+          box(ctx, cx, cy, 0.18, 0.18, H + 32, 4, "#f1eee8");
+          const tp = iso(cx + 0.09, cy + 0.09, H + 42);
+          bc.emitters.push({ x: tp[0], y: tp[1], kind: "smoke" });
         }
+        const pipeA = iso(x + w, y + h * 0.5, H * 0.6);
+        line(ctx, pipeA, [pipeA[0] + 14, pipeA[1] + 7], "#7d858e", 3);
       } else if (kind === "power") {
         const c = iso(x + w * 0.35, y + h * 0.35, H);
         const rx = 18;
@@ -387,16 +695,17 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
         ctx.quadraticCurveTo(c[0] + rx * 0.6, c[1] - ht * 0.6, c[0] + rx, c[1]);
         ctx.closePath();
         const g = ctx.createLinearGradient(c[0] - rx, 0, c[0] + rx, 0);
-        g.addColorStop(0, "#e2e5e8");
-        g.addColorStop(1, "#9aa1a8");
+        g.addColorStop(0, "#eceff1");
+        g.addColorStop(0.6, "#b7bec5");
+        g.addColorStop(1, "#8a929a");
         ctx.fillStyle = g;
         ctx.fill();
         ctx.beginPath();
         ctx.ellipse(c[0], c[1] - ht, rx * 0.75, rx * 0.3, 0, 0, Math.PI * 2);
-        ctx.fillStyle = "#6b7178";
+        ctx.fillStyle = "#5b6168";
         ctx.fill();
         line(ctx, [c[0] - rx * 0.8, c[1] - ht * 0.45], [c[0] + rx * 0.8, c[1] - ht * 0.45], "#d8433b", 3);
-        if (bc.working) bc.emitters.push({ x: c[0], y: c[1] - ht, kind: "steam" });
+        bc.emitters.push({ x: c[0], y: c[1] - ht, kind: "steam" });
       }
       break;
     }
@@ -404,10 +713,11 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     case "university": {
       windows("L", w * 3, b.floors, 0.55, 0.45);
       windows("R", h * 3, b.floors, 0.55, 0.45);
-      poly(ctx, quad(L, 0.42, 0.58, 0, 0.35), "#5a4030");
+      for (let fl = 1; fl < b.floors; fl++) line(ctx, L(0, fl / b.floors), L(1, fl / b.floors), "rgba(245,240,228,0.8)", 1.4);
+      canopy();
       flatRoof(shade(b.roof, 0.1));
       if (kind === "school") {
-        const c = L(0.5, 0.82);
+        const c = L(0.5, 0.86);
         ctx.beginPath();
         ctx.arc(c[0], c[1], 6, 0, Math.PI * 2);
         ctx.fillStyle = "#fbf6ea";
@@ -418,7 +728,7 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
         line(ctx, c, [c[0] + 3, c[1]], "#333", 1);
         const f = iso(x + w * 0.8, y + h * 0.2, H);
         line(ctx, f, [f[0], f[1] - 30], "#777", 1.5);
-        poly(ctx, [[f[0], f[1] - 30], [f[0] + 12, f[1] - 27 + Math.sin(bc.time * 3)], [f[0], f[1] - 24]], "#3d6fb6");
+        poly(ctx, [[f[0], f[1] - 30], [f[0] + 12, f[1] - 27], [f[0], f[1] - 24]], "#3d6fb6");
       } else {
         box(ctx, x + w * 0.4, y + h * 0.4, 0.4, 0.4, H, 34, wall);
         const t = iso(x + w * 0.4 + 0.2, y + h * 0.4 + 0.2, H + 34);
@@ -441,15 +751,24 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       for (let k = 0; k < 4; k++) {
         const u = 0.3 + k * 0.13;
         poly(ctx, quad(L, u, u + 0.05, 0.02, 0.7), "#f6f0e2");
+        poly(ctx, quad(L, u + 0.035, u + 0.05, 0.02, 0.7), "rgba(0,0,0,0.12)");
       }
       flatRoof(shade(wall, 0.15));
       const c = iso(x + w / 2, y + h / 2, H);
       ctx.beginPath();
-      ctx.ellipse(c[0], c[1], 20, 20 * 0.8, 0, Math.PI, 0);
-      ctx.fillStyle = "rgba(160,205,230,0.95)";
+      ctx.ellipse(c[0], c[1], 20, 16, 0, Math.PI, 0);
+      const g = ctx.createRadialGradient(c[0] - 6, c[1] - 12, 2, c[0], c[1] - 6, 22);
+      g.addColorStop(0, "rgba(230,245,255,0.95)");
+      g.addColorStop(1, "rgba(110,160,190,0.95)");
+      ctx.fillStyle = g;
       ctx.fill();
       ctx.strokeStyle = "#5c7d91";
-      ctx.stroke();
+      ctx.lineWidth = 0.8;
+      for (let k = -2; k <= 2; k++) {
+        ctx.beginPath();
+        ctx.ellipse(c[0], c[1], Math.abs(k) * 6 + 0.1, 16, 0, Math.PI, 0);
+        ctx.stroke();
+      }
       break;
     }
     case "community": {
@@ -457,11 +776,8 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       windows("R", h * 2, b.floors, 0.7, 0.55);
       poly(ctx, quad(L, 0.08, 0.2, 0.25, 0.95), "#3e8e6a");
       poly(ctx, quad(L, 0.8, 0.92, 0.25, 0.95), "#3d6fb6");
+      canopy();
       flatRoof(shade(b.roof, 0.25));
-      if (bc.community > 60 && !closed) {
-        const c = iso(x + w / 2, y + h / 2, H);
-        bc.glows.push({ x: c[0], y: c[1], r: 60, color: "255,190,120" });
-      }
       break;
     }
     case "kiosk": {
@@ -486,16 +802,23 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     }
   }
 
-  if (EMBLEM[kind] && !STOREFRONT.has(kind) && kind !== "techco" && kind !== "kiosk" && kind !== "mall" && kind !== "grocery") {
-    emoji(ctx, EMBLEM[kind]!, iso(x + w / 2, y + h / 2, H + 12), 13);
+  if (EMBLEM[kind] && !STOREFRONT.has(kind) && kind !== "techco") {
+    emoji(ctx, EMBLEM[kind]!, iso(x + w / 2, y + h / 2, H + 12), 12);
   }
 
-  if (b.born > 0 && bc.era - b.born <= 1) {
-    const p = iso(x + w / 2, y + h / 2, H + 26 + Math.sin(bc.time * 4) * 3);
-    emoji(ctx, "✨", p, 14);
-  }
-
-  if (bc.highlight) {
-    poly(ctx, buildingHull(b), undefined, bc.highlight === 2 ? "#ffd84a" : "rgba(255,255,255,0.85)", bc.highlight === 2 ? 3 : 1.5);
+  // Ground-level landscaping: planters along the front
+  if (w > 1 && kind !== "warehouse" && kind !== "factory" && kind !== "power") {
+    for (const u of [0.04, 0.96]) {
+      const p = iso(x + u * w, y + h + 0.12);
+      box(ctx, x + u * w - 0.07, y + h + 0.06, 0.14, 0.12, 0, 3, "#9a9186");
+      ctx.fillStyle = "#4f8a45";
+      ctx.beginPath();
+      ctx.arc(p[0], p[1] - 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#6aa85b";
+      ctx.beginPath();
+      ctx.arc(p[0] - 1, p[1] - 7.5, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }

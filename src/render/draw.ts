@@ -5,7 +5,7 @@ export type Pt = [number, number];
 
 export const iso = (x: number, y: number, z = 0): Pt => [((x - y) * TW) / 2, ((x + y) * TH) / 2 - z];
 
-export function poly(ctx: CanvasRenderingContext2D, pts: Pt[], fill?: string, stroke?: string, lw = 1) {
+export function poly(ctx: CanvasRenderingContext2D, pts: Pt[], fill?: string | CanvasGradient, stroke?: string, lw = 1) {
   ctx.beginPath();
   ctx.moveTo(pts[0][0], pts[0][1]);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
@@ -35,8 +35,13 @@ const cache = new Map<string, [number, number, number]>();
 function parse(hex: string): [number, number, number] {
   let v = cache.get(hex);
   if (!v) {
-    const h = hex.replace("#", "");
-    v = [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+    if (hex.startsWith("rgb")) {
+      const m = hex.match(/[\d.]+/g) ?? ["0", "0", "0"];
+      v = [Number(m[0]), Number(m[1]), Number(m[2])];
+    } else {
+      const h = hex.replace("#", "");
+      v = [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+    }
     cache.set(hex, v);
   }
   return v;

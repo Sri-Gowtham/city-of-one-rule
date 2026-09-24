@@ -2,9 +2,25 @@ import type { Sim } from "../sim/engine";
 import type { Building, Citizen, Prop, Tree } from "../sim/types";
 import { BLOCKS, DISTRICT_NAMES, LAST_ROAD, ROADS, S, idx } from "../sim/world";
 import type { DistrictId } from "../sim/types";
-import { box, buildingHull, drawBuilding } from "./buildings";
-import type { BuildCtx } from "./buildings";
-import { TH, TW, iso, line, pointInPoly, poly } from "./draw";
+import { box, buildSprite, buildingHeight, buildingHull, spriteKey } from "./buildings";
+import type { Sprite } from "./buildings";
+import { TH, TW, hash, iso, line, pointInPoly, poly } from "./draw";
+
+interface BuildCtx {
+  night: number;
+  lit: Pt[][];
+  glows: { x: number; y: number; r: number; color: string }[];
+  emitters: { x: number; y: number; kind: "smoke" | "steam" }[];
+}
+
+const HOME_KINDS = new Set(["house", "apartment"]);
+
+function litProb(hour: number, home: boolean): number {
+  if (hour >= 18 && hour < 23) return home ? 0.7 : 0.35;
+  if (hour >= 23) return home ? 0.3 : 0.15;
+  if (hour < 7.5) return home ? 0.45 : 0.1;
+  return 0;
+}
 import type { Pt } from "./draw";
 import { renderGround } from "./ground";
 
@@ -63,6 +79,7 @@ export class CityRenderer {
   private particles: Particle[] = [];
   private emitTimer = 0;
   private time = 0;
+  private sprites = new Map<number, Sprite>();
   private labels: { x: number; y: number; text: string }[] | null = null;
 
   resize(w: number, h: number, dpr: number) {
@@ -168,25 +185,15 @@ export class CityRenderer {
       ctx.fillRect(p[0] + 1, p[1] - 2, 2, 2);
     }
 
-    const bc: BuildCtx = {
-      night,
-      hour,
-      time: this.time,
-      era: sim.era,
-      lit: [],
-      glows: [],
-      emitters: [],
-      working: hour > 7 && hour < 20 && sim.phase === "running",
-      highlight: 0,
-      community: sim.culture.community,
-    };
+    const bc: BuildCtx = { night, lit: [], glows: [], emitters: [] };
+    const working = hour > 7 && hour < 20 && sim.phase === "running";
 
     type D = { d: number; f: () => void };
     const list: D[] = [];
     for (const b of world.buildings) {
       const hl: 0 | 1 | 2 =
         selected?.type === "building" && selected.id === b.id ? 2 : this.hover?.type === "building" && this.hover.id === b.id ? 1 : 0;
-      list.push({ d: b.x + b.w + b.y + b.h - 1.02, f: () => drawBuilding(ctx, b, { ...bc, highlight: hl }) });
+      list.push({ d: b.x + b.w + b.y + b.h - 1.02, f: () => this.drawBuildingSprite(ctx, sim, b, bc, hl, working) });
     }
     for (const t of world.trees) list.push({ d: t.x + t.y + 1 + t.jx + t.jy, f: () => this.drawTree(ctx, t, sim) });
     for (const p of world.props) list.push({ d: p.x + p.y + 1.05, f: () => this.drawProp(ctx, p, sim, bc) });
@@ -277,6 +284,37 @@ export class CityRenderer {
       const y0 = 2 + Math.floor(b / BLOCKS) * 6 - 0.5;
       poly(ctx, [iso(x0, y0), iso(x0 + 6, y0), iso(x0 + 6, y0 + 6), iso(x0, y0 + 6)], `hsla(${hue},80%,50%,0.38)`, "rgba(255,255,255,0.25)", 1);
     }
+  }
+
+  private drawBuildingSprite(ctx: CanvasRenderingContext2D, sim: Sim, b: Building, bc: BuildCtx, hl: 0 | 1 | 2, working: boolean) {
+    let sp = this.sprites.get(b.id);
+    if (!sp || sp.key !== spriteKey(b)) {
+      sp = buildSprite(b, 1.75);
+      this.sprites.set(b.id, sp);
+    }
+    ctx.drawImage(sp.canvas, sp.x, sp.y, sp.w, sp.h);
+    if (bc.night > 0.05 && !b.closed) {
+      const p = litProb(sim.hour, HOME_KINDS.has(b.kind));
+      const hb = Math.floor(sim.hour);
+      sp.windows.forEach((q, i) => {
+        if (hash(b.seed, i, hb) < p) bc.lit.push(q);
+      });
+      for (const l of sp.lamps) bc.glows.push({ x: l[0], y: l[1], r: 14, color: "255,210,140" });
+      if (b.kind === "community" && sim.culture.community > 60) {
+        const c = iso(b.x + b.w / 2, b.y + b.h / 2, buildingHeight(b));
+        bc.glows.push({ x: c[0], y: c[1], r: 60, color: "255,190,120" });
+      }
+    }
+    if (working && !b.closed) for (const e of sp.emitters) bc.emitters.push(e);
+    if (b.born > 0 && sim.era - b.born <= 1) {
+      const p = iso(b.x + b.w / 2, b.y + b.h / 2, buildingHeight(b) + 26 + Math.sin(this.time * 4) * 3);
+      ctx.font = "14px 'Segoe UI Emoji', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("✨", p[0], p[1]);
+      ctx.textBaseline = "alphabetic";
+    }
+    if (hl) poly(ctx, buildingHull(b), undefined, hl === 2 ? "#ffd84a" : "rgba(255,255,255,0.85)", hl === 2 ? 3 : 1.5);
   }
 
   private drawLabels(ctx: CanvasRenderingContext2D, sim: Sim) {

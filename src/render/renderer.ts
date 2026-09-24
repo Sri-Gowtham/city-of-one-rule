@@ -28,6 +28,8 @@ export type Lens = "none" | "mood" | "safety" | "green";
 
 export type Pick = { type: "citizen"; id: number } | { type: "building"; id: number } | null;
 
+type VehicleKind = "car" | "bike" | "van" | "truck";
+
 interface Car {
   axis: 0 | 1;
   line: number;
@@ -36,6 +38,7 @@ interface Car {
   speed: number;
   color: string;
   lastTurn: number;
+  kind: VehicleKind;
 }
 
 interface Particle {
@@ -55,6 +58,27 @@ const ADS = [
   ["MEGA DEALS", "#ffbe0b", "#1d1d1d"],
   ["BUY MORE", "#8338ec", "#fff"],
 ];
+
+function pickVehicleKind(d: DistrictId, rand: () => number): VehicleKind {
+  const r = rand();
+  if (d === "university" || d === "oldtown") {
+    if (r < 0.35) return "bike";
+    if (r < 0.45) return "van";
+    return "car";
+  }
+  if (d === "industrial") {
+    if (r < 0.4) return "truck";
+    if (r < 0.55) return "van";
+    return "car";
+  }
+  if (d === "downtown") {
+    if (r < 0.18) return "van";
+    if (r < 0.24) return "bike";
+    return "car";
+  }
+  if (r < 0.08) return "bike";
+  return "car";
+}
 
 export function darkness(h: number): number {
   if (h < 6.5) return 0.55;
@@ -586,6 +610,45 @@ export class CityRenderer {
         }
         break;
       }
+      case "hydrant": {
+        const base = iso(p.x + 0.5, p.y + 0.5);
+        ctx.fillStyle = "#c0392b";
+        ctx.fillRect(base[0] - 2.5, base[1] - 9, 5, 9);
+        ctx.beginPath();
+        ctx.arc(base[0], base[1] - 9, 2.6, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = "#8e2a1f";
+        ctx.fillRect(base[0] - 3.5, base[1] - 5, 7, 1.6);
+        ctx.fillRect(base[0] - 1, base[1] - 9, 2, 1.4);
+        break;
+      }
+      case "bikerack": {
+        const a = iso(p.x + 0.25, p.y + 0.5);
+        const b = iso(p.x + 0.75, p.y + 0.5);
+        ctx.strokeStyle = "#4a5058";
+        ctx.lineWidth = 1.6;
+        for (const [sx] of [[a[0]], [(a[0] + b[0]) / 2], [b[0]]]) {
+          ctx.beginPath();
+          ctx.arc(sx, a[1] - 5, 4.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "bin": {
+        const base = iso(p.x + 0.5, p.y + 0.5);
+        const recycle = p.variant === 1;
+        ctx.fillStyle = recycle ? "#2f7d4f" : "#3c4048";
+        ctx.fillRect(base[0] - 3, base[1] - 7, 6, 7);
+        ctx.fillStyle = recycle ? "#255f3d" : "#2b2e34";
+        ctx.fillRect(base[0] - 3.4, base[1] - 7.6, 6.8, 1.4);
+        if (recycle) {
+          ctx.font = "6px sans-serif";
+          ctx.fillStyle = "#dff5e6";
+          ctx.textAlign = "center";
+          ctx.fillText("♻", base[0], base[1] - 2.5);
+        }
+        break;
+      }
       case "crane": {
         const base = iso(p.x + 0.5, p.y + 0.5);
         const top: Pt = [base[0], base[1] - 90];
@@ -615,14 +678,21 @@ export class CityRenderer {
     const target = Math.round((busy ? 16 + sim.metrics.economy / 4 : 7) * (sim.phase === "running" ? 1 : 0.6));
     while (this.cars.length < target) {
       const axis = (Math.random() < 0.5 ? 0 : 1) as 0 | 1;
+      const line = ROADS[Math.floor(Math.random() * ROADS.length)];
+      const pos = 1.5 + Math.random() * (LAST_ROAD - 2);
+      const sampleX = axis === 0 ? Math.floor(pos) : line;
+      const sampleY = axis === 0 ? line : Math.floor(pos);
+      const d = sim.world.district[Math.min(sim.world.tiles.length - 1, Math.max(0, sampleY * S + sampleX))];
+      const kind = pickVehicleKind(d, Math.random);
       this.cars.push({
         axis,
-        line: ROADS[Math.floor(Math.random() * ROADS.length)],
-        pos: 1.5 + Math.random() * (LAST_ROAD - 2),
+        line,
+        pos,
         dir: Math.random() < 0.5 ? 1 : -1,
-        speed: 1.6 + Math.random() * 1.2,
-        color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
+        speed: (kind === "bike" ? 1.1 : kind === "truck" ? 1.3 : 1.6) + Math.random() * 1.2,
+        color: kind === "bike" ? "#2b2f36" : CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
         lastTurn: -1,
+        kind,
       });
     }
     if (this.cars.length > target + 2) this.cars.splice(target);
@@ -651,12 +721,34 @@ export class CityRenderer {
 
   private drawCar(ctx: CanvasRenderingContext2D, car: Car, night: number) {
     const [cx, cy] = this.carPos(car);
-    const lw = car.axis === 0 ? 0.55 : 0.3;
-    const lh = car.axis === 0 ? 0.3 : 0.55;
-    box(ctx, cx - lw / 2, cy - lh / 2, lw, lh, 0, 6, car.color);
-    box(ctx, cx - lw / 4, cy - lh / 4, lw / 2, lh / 2, 6, 4, "#2b3440", "#7fa2c0");
+    if (car.kind === "bike") {
+      const p = iso(cx, cy, 3);
+      ctx.strokeStyle = "#1c1e24";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(p[0] - 3, p[1] + 2, 3, 0, Math.PI * 2);
+      ctx.arc(p[0] + 3, p[1] + 2, 3, 0, Math.PI * 2);
+      ctx.stroke();
+      line(ctx, [p[0] - 3, p[1] + 2], [p[0] + 1, p[1] - 3], "#1c1e24", 1.4);
+      line(ctx, [p[0] + 3, p[1] + 2], [p[0] + 1, p[1] - 3], "#1c1e24", 1.4);
+      ctx.fillStyle = "#c88a4a";
+      ctx.beginPath();
+      ctx.arc(p[0] + 1, p[1] - 7, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    const scale = car.kind === "truck" ? 1.5 : car.kind === "van" ? 1.2 : 1;
+    const lw = (car.axis === 0 ? 0.55 : 0.3) * scale;
+    const lh = (car.axis === 0 ? 0.3 : 0.55) * scale;
+    const height = car.kind === "truck" ? 11 : car.kind === "van" ? 9 : 6;
+    box(ctx, cx - lw / 2, cy - lh / 2, lw, lh, 0, height, car.color);
+    if (car.kind === "van" || car.kind === "truck") {
+      box(ctx, cx - lw * 0.42, cy - lh * 0.42, lw * 0.28, lh * 0.28, height, 4, "#c9dcea");
+    } else {
+      box(ctx, cx - lw / 4, cy - lh / 4, lw / 2, lh / 2, height, 4, "#2b3440", "#7fa2c0");
+    }
     if (night > 0.1) {
-      const p = iso(cx, cy, 5);
+      const p = iso(cx, cy, height - 1);
       ctx.fillStyle = "#fff4c8";
       ctx.fillRect(p[0] - 1, p[1] - 1, 2, 2);
     }

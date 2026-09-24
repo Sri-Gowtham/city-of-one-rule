@@ -293,7 +293,7 @@ export interface Tree {
 }
 
 export interface Prop {
-  kind: "streetlight" | "billboard" | "bench" | "fountain" | "noticeboard" | "stall" | "crane";
+  kind: "streetlight" | "billboard" | "bench" | "fountain" | "noticeboard" | "stall" | "crane" | "hydrant" | "bikerack" | "bin";
   x: number;
   y: number;
   variant: number;

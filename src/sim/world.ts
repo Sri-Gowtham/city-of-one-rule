@@ -324,6 +324,32 @@ export function generateWorld(rng: Rng): World {
   rng.shuffle(billboardSpots);
   for (const s of billboardSpots.slice(0, 9)) world.props.push({ kind: "billboard", x: s.x, y: s.y, variant: rng.int(0, 4) });
 
+  // District-appropriate street furniture: hydrants near dense/industrial blocks,
+  // bike racks near university/old-town/residential, bins wherever people gather.
+  const walkSpots: { x: number; y: number; d: DistrictId }[] = [];
+  for (let i = 0; i < S * S; i++) {
+    if ((tiles[i] === "walk" || tiles[i] === "path" || tiles[i] === "garden") && occupied[i] === -1) {
+      walkSpots.push({ x: i % S, y: Math.floor(i / S), d: district[i] });
+    }
+  }
+  rng.shuffle(walkSpots);
+  let hydrants = 0;
+  let racks = 0;
+  let bins = 0;
+  for (const s of walkSpots) {
+    const dense = s.d === "downtown" || s.d === "industrial" || s.d === "oldtown";
+    if (dense && hydrants < 10 && rng.chance(0.05)) {
+      world.props.push({ kind: "hydrant", x: s.x, y: s.y, variant: 0 });
+      hydrants++;
+    } else if ((s.d === "university" || s.d === "oldtown" || s.d === "residential") && racks < 8 && rng.chance(0.06)) {
+      world.props.push({ kind: "bikerack", x: s.x, y: s.y, variant: 0 });
+      racks++;
+    } else if (bins < 16 && rng.chance(0.04)) {
+      world.props.push({ kind: "bin", x: s.x, y: s.y, variant: rng.int(0, 1) });
+      bins++;
+    }
+  }
+
   for (const b of world.buildings) b.door = findDoor(world, b);
 
   for (let i = 0; i < S * S; i++) {

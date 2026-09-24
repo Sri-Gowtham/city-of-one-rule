@@ -90,6 +90,7 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
   residential: [
     { t: "big", kind: "school", name: "Riverside School" },
     { t: "big", kind: "school", name: "Hillcrest Academy" },
+    { t: "big", kind: "firestation", name: "Riverside Fire Station" },
     { t: "big", kind: "community", name: "Eastside Commons" },
     { t: "big", kind: "grocery", name: "Maple Grocer" },
     ...rep<LotSpec>(5, { t: "big", kind: "apartment" }),
@@ -170,6 +171,9 @@ const FLOORS: Record<BuildingKind, [number, number]> = {
   boutique: [2, 2],
   repair: [1, 1],
   workshop: [1, 1],
+  police: [2, 3],
+  firestation: [1, 2],
+  hospital: [3, 5],
 };
 
 const WALLS: Partial<Record<BuildingKind, string[]>> = {
@@ -202,6 +206,9 @@ const BASE_COLORS: Record<BuildingKind, [string, string, string]> = {
   library: ["#e3cfa3", "#6a7f8f", "#3e6b53"],
   lab: ["#eef1f3", "#7d8b96", "#4aa3d9"],
   community: ["#c7835a", "#5b4a3f", "#3e8e6a"],
+  police: ["#c7ccd1", "#1f3a63", "#d9b44a"],
+  firestation: ["#a65a45", "#3a2a24", "#f2c14e"],
+  hospital: ["#eef1f3", "#7d8b96", "#e0463a"],
   cityhall: ["#efe4cc", "#3d8d86", "#d9b44a"],
   kiosk: ["#f2c46b", "#d8433b", "#ffffff"],
   boutique: ["#2f2f38", "#1d1d24", "#d9b44a"],
@@ -364,9 +371,9 @@ export function generateWorld(rng: Rng): World {
 function buildCivic(world: World, rng: Rng, x0: number, y0: number) {
   for (let ly = 0; ly < 5; ly++) for (let lx = 0; lx < 5; lx++) world.tiles[idx(x0 + lx, y0 + ly)] = "plaza";
   addBuilding(world, rng, "cityhall", x0 + 1, y0, 3, 3, "downtown", "City Hall");
+  addBuilding(world, rng, "police", x0, y0 + 3, 1, 2, "downtown", "Central Police Station");
+  addBuilding(world, rng, "hospital", x0 + 4, y0 + 3, 1, 2, "downtown", "City General Hospital");
   world.props.push({ kind: "fountain", x: x0 + 2, y: y0 + 4, variant: 0 });
-  world.props.push({ kind: "bench", x: x0, y: y0 + 4, variant: 0 });
-  world.props.push({ kind: "bench", x: x0 + 4, y: y0 + 4, variant: 0 });
   world.plazaSpot = { x: x0 + 2, y: y0 + 3 };
   addTree(world, rng, x0, y0, -999, false);
   addTree(world, rng, x0 + 4, y0, -999, false);

@@ -454,8 +454,10 @@ export class CityRenderer {
   private drawCitizen(ctx: CanvasRenderingContext2D, c: Citizen, sim: Sim, selected: Pick) {
     const [px, py] = iso(c.x + c.ox * 0.5, c.y + c.oy * 0.5);
     const moving = c.path.length > 0;
-    const swing = moving ? Math.sin(c.walkPhase) * 3 : 0;
-    const bob = moving ? Math.abs(Math.cos(c.walkPhase)) * 1.2 : 0;
+    const scale = c.ageBand === "youth" ? 0.82 : c.ageBand === "elder" ? 0.92 : 1;
+    const swingMul = c.ageBand === "elder" ? 0.6 : 1;
+    const swing = moving ? Math.sin(c.walkPhase) * 3 * swingMul : 0;
+    const bob = moving ? Math.abs(Math.cos(c.walkPhase)) * 1.2 * scale : 0;
     const isSel = selected?.type === "citizen" && selected.id === c.id;
     if (isSel) {
       ctx.beginPath();
@@ -466,22 +468,51 @@ export class CityRenderer {
     }
     ctx.fillStyle = "rgba(0,0,0,0.25)";
     ctx.beginPath();
-    ctx.ellipse(px, py, 5.5, 2.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(px, py, 5.5 * scale, 2.6 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
-    line(ctx, [px - 1.6, py - 7 - bob], [px - 1.6 + swing, py], "#2b2b33", 2.2);
-    line(ctx, [px + 1.6, py - 7 - bob], [px + 1.6 - swing, py], "#2b2b33", 2.2);
+    const legTop = py - 7 * scale - bob;
+    line(ctx, [px - 1.6 * scale, legTop], [px - 1.6 * scale + swing, py], "#2b2b33", 2.2);
+    line(ctx, [px + 1.6 * scale, legTop], [px + 1.6 * scale - swing, py], "#2b2b33", 2.2);
+    if (c.accessory === "backpack") {
+      ctx.fillStyle = "#5a8a4a";
+      ctx.beginPath();
+      ctx.roundRect(px - 3 * scale, py - 18 * scale - bob, 4 * scale, 8 * scale, 2);
+      ctx.fill();
+    }
     ctx.fillStyle = c.shirt;
     ctx.beginPath();
-    ctx.roundRect(px - 4, py - 17 - bob, 8, 11, 3);
+    ctx.roundRect(px - 4 * scale, py - 17 * scale - bob, 8 * scale, 11 * scale, 3);
     ctx.fill();
+    if (c.accessory === "vest") {
+      ctx.fillStyle = "#f2c14e";
+      ctx.fillRect(px - 4 * scale, py - 17 * scale - bob, 8 * scale, 4 * scale);
+    } else if (c.accessory === "coat") {
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(px, py - 17 * scale - bob);
+      ctx.lineTo(px, py - 6 * scale - bob);
+      ctx.stroke();
+    } else if (c.accessory === "badge") {
+      ctx.fillStyle = "#d9b44a";
+      ctx.fillRect(px - 2.5, py - 15 * scale - bob, 2, 2);
+    }
     ctx.fillStyle = c.skin;
     ctx.beginPath();
-    ctx.arc(px, py - 20.5 - bob, 3.6, 0, Math.PI * 2);
+    ctx.arc(px, py - 20.5 * scale - bob, 3.6 * scale, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = c.hair;
-    ctx.beginPath();
-    ctx.arc(px, py - 21.5 - bob, 3.7, Math.PI, 0);
-    ctx.fill();
+    if (c.accessory === "helmet") {
+      ctx.fillStyle = "#d8433b";
+      ctx.beginPath();
+      ctx.arc(px, py - 22 * scale - bob, 3.9 * scale, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(px - 3.9 * scale, py - 22 * scale - bob, 7.8 * scale, 1.4);
+    } else {
+      ctx.fillStyle = c.hair;
+      ctx.beginPath();
+      ctx.arc(px, py - 21.5 * scale - bob, 3.7 * scale, Math.PI, 0);
+      ctx.fill();
+    }
     if (c.activity === "protest") {
       line(ctx, [px + 5, py - 12], [px + 5, py - 34], "#6b4a2f", 1.5);
       ctx.fillStyle = "#fff8e6";

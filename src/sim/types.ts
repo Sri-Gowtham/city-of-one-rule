@@ -86,7 +86,13 @@ export type BuildingKind =
   | "kiosk"
   | "boutique"
   | "repair"
-  | "workshop";
+  | "workshop"
+  | "police"
+  | "firestation"
+  | "hospital";
+
+export type AgeBand = "youth" | "adult" | "elder";
+export type Accessory = "none" | "backpack" | "badge" | "helmet" | "coat" | "vest";
 
 export type Behavior =
   | "help"
@@ -259,6 +265,8 @@ export interface Citizen {
   shirt: string;
   walkPhase: number;
   lastBiz: number | null;
+  ageBand: AgeBand;
+  accessory: Accessory;
 }
 
 export interface Building {

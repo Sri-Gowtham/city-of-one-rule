@@ -1,7 +1,7 @@
 import { clamp01 } from "./rng";
 import type { Rng } from "./rng";
 import { BEHAVIORS } from "./types";
-import type { Behavior, BuildingKind, Citizen, DistrictId, OccGroup, Traits, World } from "./types";
+import type { Accessory, AgeBand, Behavior, BuildingKind, Citizen, DistrictId, OccGroup, Traits, World } from "./types";
 
 interface Occ {
   work: BuildingKind[] | null;
@@ -35,6 +35,21 @@ const OCC: Record<string, Occ> = {
   Retiree: { work: null, group: "none", wage: 0, stipend: 11, homes: ["suburbs", "oldtown"], bias: { attachment: 0.25 } },
   Unemployed: { work: null, group: "none", wage: 0, stipend: 6, homes: ["industrial", "residential"], bias: { risk: 0.15, trust: -0.15 } },
   "Cinema Manager": { work: ["cinema"], group: "commerce", wage: 3, stipend: 0, homes: ["downtown", "residential"], bias: {} },
+  "Police Officer": { work: ["police"], group: "civic", wage: 3.6, stipend: 0, homes: ["residential", "suburbs"], bias: { risk: 0.15, trust: 0.1 } },
+  Firefighter: { work: ["firestation"], group: "civic", wage: 3.6, stipend: 0, homes: ["residential", "suburbs"], bias: { generosity: 0.15, risk: 0.1 } },
+  Doctor: { work: ["hospital"], group: "office", wage: 6, stipend: 0, homes: ["suburbs", "downtown"], bias: { generosity: 0.1, trust: 0.1 } },
+  Nurse: { work: ["hospital"], group: "office", wage: 4, stipend: 0, homes: ["residential", "suburbs"], bias: { generosity: 0.2, attachment: 0.15 } },
+};
+
+const OCC_ACCESSORY: Partial<Record<string, Accessory>> = {
+  "Police Officer": "badge",
+  Firefighter: "helmet",
+  Doctor: "coat",
+  Nurse: "coat",
+  "Factory Worker": "vest",
+  "Warehouse Worker": "vest",
+  "Plant Operator": "vest",
+  Student: "backpack",
 };
 
 const PEOPLE: [string, string, Partial<Traits>?][] = [
@@ -51,7 +66,7 @@ const PEOPLE: [string, string, Partial<Traits>?][] = [
   ["Leo", "Warehouse Worker"],
   ["Yuki", "Librarian"],
   ["Carlos", "Chef"],
-  ["Ines", "Banker"],
+  ["Ines", "Doctor"],
   ["Ravi", "Cashier"],
   ["Zara", "Artist"],
   ["Marcus", "Plant Operator"],
@@ -68,12 +83,12 @@ const PEOPLE: [string, string, Partial<Traits>?][] = [
   ["Nathan", "Software Engineer"],
   ["Ruth", "Retiree"],
   ["Diego", "Chef"],
-  ["Aisha", "Cashier"],
+  ["Aisha", "Nurse"],
   ["Mateo", "Student"],
   ["Hana", "Researcher"],
   ["Kwame", "Journalist"],
   ["Olga", "Retiree"],
-  ["Sami", "Unemployed"],
+  ["Sami", "Police Officer"],
   ["Beatriz", "Banker"],
   ["Jonah", "Cinema Manager"],
   ["Mei", "Office Clerk"],
@@ -83,7 +98,7 @@ const PEOPLE: [string, string, Partial<Traits>?][] = [
   ["Nia", "Student"],
   ["Oscar", "Civil Servant"],
   ["Leila", "Artist"],
-  ["Finn", "Unemployed"],
+  ["Finn", "Firefighter"],
   ["Rosa", "Retiree"],
   ["Idris", "Plant Operator"],
   ["Sana", "Teacher"],
@@ -103,7 +118,7 @@ const PEOPLE: [string, string, Partial<Traits>?][] = [
   ["Greta", "Librarian"],
   ["Obi", "Community Organizer"],
   ["Rhea", "Journalist"],
-  ["Noah", "Unemployed"],
+  ["Noah", "Police Officer"],
   ["Imani", "Civil Servant"],
   ["Luca", "Factory Worker"],
   ["Chen", "Professor"],
@@ -259,10 +274,12 @@ export function generateCitizens(rng: Rng, world: World): Citizen[] {
       day: { helped: 0, planted: false, learned: false, rewarded: false, lunch: false, outside: 0, delegatedTo: null, taskHour: 15 },
       log: [],
       skin: rng.pick(SKIN),
-      hair: rng.pick(HAIR),
+      hair: occupation === "Retiree" ? rng.pick(["#c9c4b8", "#d9d2c5", "#e5e0d4"]) : rng.pick(HAIR),
       shirt: rng.pick(SHIRT[occ.group]),
       walkPhase: rng.range(0, 6),
       lastBiz: null,
+      ageBand: (occupation === "Retiree" ? "elder" : occupation === "Student" ? "youth" : "adult") as AgeBand,
+      accessory: (OCC_ACCESSORY[occupation] ?? "none") as Accessory,
     } satisfies Citizen;
   });
 }

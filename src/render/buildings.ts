@@ -32,6 +32,9 @@ const FLOOR_H: Partial<Record<BuildingKind, number>> = {
   kiosk: 12,
   grocery: 20,
   mall: 17,
+  police: 15,
+  firestation: 18,
+  hospital: 14,
 };
 
 const MATERIAL: Record<BuildingKind, Material> = {
@@ -60,6 +63,9 @@ const MATERIAL: Record<BuildingKind, Material> = {
   boutique: "stone",
   repair: "brick",
   workshop: "siding",
+  police: "concrete",
+  firestation: "brick",
+  hospital: "concrete",
 };
 
 const EMBLEM: Partial<Record<BuildingKind, string>> = {
@@ -80,6 +86,9 @@ const EMBLEM: Partial<Record<BuildingKind, string>> = {
   power: "⚡",
   school: "✏️",
   university: "🎓",
+  police: "🚓",
+  firestation: "🚒",
+  hospital: "🏥",
 };
 
 const STOREFRONT: ReadonlySet<BuildingKind> = new Set<BuildingKind>(["shop", "cafe", "restaurant", "boutique", "repair", "workshop"]);
@@ -778,6 +787,93 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       poly(ctx, quad(L, 0.8, 0.92, 0.25, 0.95), "#3d6fb6");
       canopy();
       flatRoof(shade(b.roof, 0.25));
+      break;
+    }
+    case "police": {
+      windows("L", w * 2, b.floors, 0.6, 0.5);
+      windows("R", h * 2, b.floors, 0.55, 0.5, false, "#a9c3e0");
+      const band = quad(L, 0.05, 0.95, 1 - 0.28 / b.floors, 1 - 0.06 / b.floors);
+      poly(ctx, band, "#1f3a63", "rgba(0,0,0,0.3)", 0.8);
+      faceText(ctx, "POLICE", L(0.5, 1 - 0.17 / b.floors), "L", 9, "#ffffff", 800);
+      canopy();
+      flatRoof(shade(b.roof, 0.12));
+      const badge = L(0.5, Math.min(0.95, 1 - 0.06 / b.floors + 0.14));
+      ctx.beginPath();
+      ctx.arc(badge[0], badge[1], 6, 0, Math.PI * 2);
+      ctx.fillStyle = "#d9b44a";
+      ctx.fill();
+      emoji(ctx, "🛡️", badge, 8);
+      const cx = x + w + 0.35;
+      const cy = y + h * 0.3;
+      box(ctx, cx, cy, 0.3, 0.16, 0, 6, "#1f3a63");
+      box(ctx, cx + 0.06, cy + 0.02, 0.14, 0.1, 6, 4, "#0e1a2e", "#7fa2c0");
+      const roofbar = iso(cx + 0.15, cy + 0.08, 6);
+      ctx.fillStyle = "#d8433b";
+      ctx.fillRect(roofbar[0] - 3, roofbar[1] - 2, 3, 2);
+      ctx.fillStyle = "#3d6fb6";
+      ctx.fillRect(roofbar[0], roofbar[1] - 2, 3, 2);
+      break;
+    }
+    case "hospital": {
+      windows("L", w * 2, b.floors, 0.6, 0.5);
+      windows("R", h * 2, b.floors, 0.55, 0.5, false, "#cfeaf0");
+      canopy();
+      flatRoof(shade(b.roof, 0.25));
+      const cross = L(0.5, 1 - 0.1 / b.floors + 0.16);
+      ctx.fillStyle = "#e0463a";
+      ctx.fillRect(cross[0] - 2.2, cross[1] - 7, 4.4, 14);
+      ctx.fillRect(cross[0] - 7, cross[1] - 2.2, 14, 4.4);
+      const bay = quad(L, 0.06, 0.34, 0, 0.5);
+      poly(ctx, bay, "#c7cdd3");
+      ctx.beginPath();
+      for (let k = 1; k < 10; k++) {
+        const a = lerp(bay[0], bay[3], k / 10);
+        const c = lerp(bay[1], bay[2], k / 10);
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(c[0], c[1]);
+      }
+      ctx.strokeStyle = "rgba(0,0,0,0.18)";
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+      const acx = x - 0.4;
+      const acy = y + h * 0.25;
+      box(ctx, acx, acy, 0.28, 0.16, 0, 7, "#f2f2f0");
+      box(ctx, acx + 0.05, acy + 0.02, 0.16, 0.1, 7, 5, "#dfe6ea", "#a9c3e0");
+      const acTop = iso(acx + 0.14, acy + 0.08, 7);
+      ctx.fillStyle = "#e0463a";
+      ctx.fillRect(acTop[0] - 3, acTop[1] - 3, 6, 2);
+      ctx.fillRect(acTop[0] - 1, acTop[1] - 5, 2, 6);
+      break;
+    }
+    case "firestation": {
+      windows("L", w * 2, b.floors, 0.55, 0.45, true);
+      windows("R", h * 2, b.floors, 0.5, 0.45);
+      const doors = w >= 2 ? [0.1, 0.55] : [0.15];
+      for (const u of doors) {
+        const bay = quad(L, u, u + 0.35, 0, 0.6);
+        poly(ctx, bay, "#8f2a22");
+        ctx.beginPath();
+        for (let k = 1; k < 8; k++) {
+          const a = lerp(bay[0], bay[3], k / 8);
+          const c = lerp(bay[1], bay[2], k / 8);
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(c[0], c[1]);
+        }
+        ctx.strokeStyle = "rgba(0,0,0,0.25)";
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+        if (!closed) {
+          const truck = inset(bay, 0.16);
+          poly(ctx, truck, "#d8433b");
+          poly(ctx, [truck[0], lerp(truck[0], truck[1], 0.5), lerp(truck[3], truck[2], 0.5), truck[3]], "#f2c14e");
+        }
+      }
+      flatRoof(shade(b.roof, 0.1));
+      const pole = iso(x + w - 0.3, y + h - 0.3, H);
+      line(ctx, pole, [pole[0], pole[1] - 22], "#c9a33a", 3);
+      const flag = iso(x + w * 0.5, y + 0.15, H);
+      line(ctx, flag, [flag[0], flag[1] - 20], "#666", 1.5);
+      poly(ctx, [[flag[0], flag[1] - 20], [flag[0] + 12, flag[1] - 17], [flag[0], flag[1] - 14]], "#d8433b");
       break;
     }
     case "kiosk": {

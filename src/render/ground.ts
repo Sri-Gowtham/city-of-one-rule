@@ -79,6 +79,12 @@ function decorate(ctx: CanvasRenderingContext2D, world: World, x: number, y: num
         line(ctx, iso(x + u, y + 0.05), iso(x + u, y + 0.2), "rgba(240,240,240,0.55)", 2);
         line(ctx, iso(x + u, y + 0.8), iso(x + u, y + 0.95), "rgba(240,240,240,0.55)", 2);
       }
+      // Crosswalk zebra stripes across the intersection, in the other direction.
+      for (let k = 0; k < 4; k++) {
+        const v = 0.2 + k * 0.2;
+        line(ctx, iso(x + 0.05, y + v), iso(x + 0.2, y + v), "rgba(240,240,240,0.5)", 2);
+        line(ctx, iso(x + 0.8, y + v), iso(x + 0.95, y + v), "rgba(240,240,240,0.5)", 2);
+      }
     }
   } else if (t === "bridge") {
     line(ctx, iso(x, y + 0.08), iso(x + 1, y + 0.08), "#c9ccd2", 2.5);
@@ -108,6 +114,9 @@ function decorate(ctx: CanvasRenderingContext2D, world: World, x: number, y: num
     }
   } else if (t === "plaza" || t === "walk") {
     poly(ctx, [iso(x + 0.5, y + 0.1), iso(x + 0.9, y + 0.5), iso(x + 0.5, y + 0.9), iso(x + 0.1, y + 0.5)], undefined, "rgba(0,0,0,0.06)");
+    // Sidewalk texture: a faint 2x2 paving grid.
+    line(ctx, iso(x + 0.5, y), iso(x + 0.5, y + 1), "rgba(0,0,0,0.045)", 0.5);
+    line(ctx, iso(x, y + 0.5), iso(x + 1, y + 0.5), "rgba(0,0,0,0.045)", 0.5);
   } else if (t === "lot") {
     for (let k = 0; k < 6; k++) {
       const p = iso(x + hash(x, y, k), y + hash(y, x, k));
@@ -120,6 +129,45 @@ function decorate(ctx: CanvasRenderingContext2D, world: World, x: number, y: num
       const p = iso(x + 0.15 + hash(x, y, k) * 0.7, y + 0.15 + hash(y, x, k) * 0.7);
       ctx.fillStyle = colors[(k + Math.floor(n * 10)) % colors.length];
       ctx.fillRect(p[0], p[1], 2, 2);
+    }
+  } else if (t === "park") {
+    // Small baked undergrowth trees, clustered by tile hash. Purely a ground texture,
+    // separate from the simulated Tree entities drawn as sprites above the ground layer.
+    const count = n > 0.72 ? 2 : n > 0.4 ? 1 : 0;
+    for (let k = 0; k < count; k++) {
+      const tx = x + 0.2 + hash(x, y, k, 21) * 0.6;
+      const ty = y + 0.2 + hash(y, x, k, 22) * 0.6;
+      const ts = 0.55 + hash(x, y, k, 23) * 0.4;
+      const p = iso(tx, ty);
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      ctx.beginPath();
+      ctx.ellipse(p[0] + 1, p[1], 4 * ts, 1.8 * ts, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#5c4028";
+      ctx.fillRect(p[0] - 0.6 * ts, p[1] - 4 * ts, 1.2 * ts, 4 * ts);
+      const pine = hash(x, y, k, 24) > 0.5;
+      if (pine) {
+        for (let j = 0; j < 3; j++) {
+          const yb = p[1] - 3 * ts - j * 2.6 * ts;
+          const wd = (4.4 - j * 1.1) * ts;
+          ctx.fillStyle = j % 2 ? "#4f7d43" : "#3f6a38";
+          ctx.beginPath();
+          ctx.moveTo(p[0] - wd, yb);
+          ctx.lineTo(p[0] + wd, yb);
+          ctx.lineTo(p[0], yb - 4.4 * ts);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else {
+        ctx.fillStyle = "#4f7d43";
+        ctx.beginPath();
+        ctx.arc(p[0], p[1] - 7 * ts, 3.6 * ts, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#5f9350";
+        ctx.beginPath();
+        ctx.arc(p[0] - 1.4 * ts, p[1] - 8.4 * ts, 2.2 * ts, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   } else if (t === "sand") {
     const nearWater = tileAt(x + 1, y) === "water" || tileAt(x, y + 1) === "water";

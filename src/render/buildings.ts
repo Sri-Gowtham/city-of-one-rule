@@ -937,6 +937,58 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       ctx.fillRect(p[0], p[1], 2 + rnd(k, 33) * 3, 1.5);
     }
   }
+  // Disrepair: cracks appear below 0.4 condition, windows start breaking below 0.2,
+  // and ivy creeps up closed, badly-worn buildings.
+  if (b.condition < 0.4) {
+    const crackCount = b.condition < 0.2 ? 4 : 2;
+    for (let k = 0; k < crackCount; k++) {
+      const f = k % 2 ? L : R;
+      const u0 = 0.1 + rnd(k, 41) * 0.7;
+      const v0 = 0.15 + rnd(k, 42) * 0.5;
+      const a = f(u0, v0);
+      const b2 = f(u0 + 0.05 + rnd(k, 43) * 0.08, v0 - 0.18 - rnd(k, 44) * 0.15);
+      const mid: Pt = [(a[0] + b2[0]) / 2 + (rnd(k, 45) - 0.5) * 6, (a[1] + b2[1]) / 2];
+      ctx.strokeStyle = "rgba(20,16,12,0.5)";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(mid[0], mid[1]);
+      ctx.lineTo(b2[0], b2[1]);
+      ctx.stroke();
+    }
+  }
+  if (b.condition < 0.2 && bc.windows.length) {
+    const brokenCount = Math.max(1, Math.round(bc.windows.length * 0.4));
+    for (let k = 0; k < brokenCount; k++) {
+      const glass = bc.windows[Math.floor(rnd(k, 51) * bc.windows.length)];
+      poly(ctx, glass, "rgba(15,15,18,0.55)");
+      line(ctx, glass[0], glass[2], "rgba(0,0,0,0.6)", 1);
+      line(ctx, glass[1], glass[3], "rgba(0,0,0,0.6)", 1);
+    }
+  }
+  if (b.closed && b.condition < 0.3) {
+    const ivyFace = rnd(0, 61) > 0.5 ? L : R;
+    const baseU = 0.08 + rnd(0, 62) * 0.15;
+    const topV = 0.4 + rnd(0, 63) * 0.4;
+    ctx.strokeStyle = "rgba(60,110,55,0.75)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    const p0 = ivyFace(baseU, 0);
+    ctx.moveTo(p0[0], p0[1]);
+    for (let v = 0.15; v <= topV; v += 0.15) {
+      const p = ivyFace(baseU + Math.sin(v * 14) * 0.02, v);
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.stroke();
+    for (let v = 0.2; v <= topV; v += 0.22) {
+      const p = ivyFace(baseU + Math.sin(v * 14) * 0.02, v);
+      ctx.fillStyle = "rgba(70,120,60,0.8)";
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   // Prosperity: higher levels earn rooftop gardens, crowns and lit trims
   if (!closed && b.level >= 4 && kind !== "house" && kind !== "cityhall") {
     const top = [up(N, H), up(E, H), up(S, H), up(W, H)];

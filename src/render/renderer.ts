@@ -37,6 +37,9 @@ function litProb(hour: number, home: boolean): number {
 }
 import type { Pt } from "./draw";
 import { renderGround } from "./ground";
+import { drawSky } from "./atmosphere";
+import { dayWeather, drawClouds, drawFog, drawPuddles, drawRain, drawWaterShimmer } from "./weather";
+import type { Weather } from "./weather";
 
 export type Lens = "none" | "mood" | "safety" | "green";
 
@@ -121,6 +124,8 @@ export class CityRenderer {
   private labels: { x: number; y: number; text: string }[] | null = null;
   private metroKey = "";
   private metroPath: { pts: Pt[]; cum: number[]; total: number } | null = null;
+  private lastLevel = new Map<number, number>();
+  private levelFlash = new Map<number, number>();
 
   resize(w: number, h: number, dpr: number) {
     this.w = w;
@@ -199,12 +204,16 @@ export class CityRenderer {
       this.centerOn(c.x, c.y, Math.min(1, realDt * 4));
     }
 
+    const weather: Weather = dayWeather(sim.seed, sim.era);
+
+    // Where the city's far (south) edge actually sits on screen under the current camera —
+    // the sky's horizon must track this, or the sun/moon set at a line that has nothing to do
+    // with where the water and buildings really are, and the whole city reads as floating.
+    const horizonY = Math.max(h * 0.32, Math.min(h * 1.3, this.toScreen(iso(S, S))[1]));
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const sky = ctx.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0, "#2d6f9a");
-    sky.addColorStop(1, "#3b86b3");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, w, h);
+    drawSky(ctx, hour, w, h, horizonY);
+    if (weather === "cloudy" || weather === "rainy") drawClouds(ctx, w, h, this.time, weather);
 
     const envBucket = Math.round(sim.metrics.environment / 8);
     const key = `${world.groundVersion}|${envBucket}`;
@@ -216,6 +225,24 @@ export class CityRenderer {
     const z = this.cam.zoom;
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * this.cam.x, dpr * this.cam.y);
     ctx.drawImage(this.ground, -(S * TW) / 2, 0);
+
+    const vx0 = -this.cam.x / z - 160;
+    const vy0 = -this.cam.y / z - 220;
+    const vx1 = (w - this.cam.x) / z + 160;
+    const vy1 = (h - this.cam.y) / z + 120;
+    const visible = (x: number, y: number) => {
+      const [px, py] = iso(x, y);
+      return px > vx0 && px < vx1 && py > vy0 && py < vy1;
+    };
+    // Tile-space bounds of the visible area (inverse of iso()), for the per-frame water/puddle passes.
+    const toTile = (px: number, py: number): Pt => [px / TW + py / TH, py / TH - px / TW];
+    const corners = [toTile(vx0, vy0), toTile(vx1, vy0), toTile(vx0, vy1), toTile(vx1, vy1)];
+    const tileX0 = Math.floor(Math.min(...corners.map((p) => p[0]))) - 2;
+    const tileX1 = Math.ceil(Math.max(...corners.map((p) => p[0]))) + 2;
+    const tileY0 = Math.floor(Math.min(...corners.map((p) => p[1]))) - 2;
+    const tileY1 = Math.ceil(Math.max(...corners.map((p) => p[1]))) + 2;
+    drawWaterShimmer(ctx, world, this.time, tileX0, tileY0, tileX1, tileY1);
+    if (weather === "rainy") drawPuddles(ctx, world, this.time, tileX0, tileY0, tileX1, tileY1);
 
     for (const l of world.litter) {
       const p = iso(l.x + l.jx, l.y + l.jy);
@@ -230,16 +257,10 @@ export class CityRenderer {
 
     type D = { d: number; f: () => void };
     const list: D[] = [];
-    const vx0 = -this.cam.x / z - 160;
-    const vy0 = -this.cam.y / z - 220;
-    const vx1 = (w - this.cam.x) / z + 160;
-    const vy1 = (h - this.cam.y) / z + 120;
-    const visible = (x: number, y: number) => {
-      const [px, py] = iso(x, y);
-      return px > vx0 && px < vx1 && py > vy0 && py < vy1;
-    };
+    const visibleBuildings: Building[] = [];
     for (const b of world.buildings) {
       if (!visible(b.x + b.w / 2, b.y + b.h / 2)) continue;
+      visibleBuildings.push(b);
       const hl: 0 | 1 | 2 =
         selected?.type === "building" && selected.id === b.id ? 2 : this.hover?.type === "building" && this.hover.id === b.id ? 1 : 0;
       list.push({ d: b.x + b.w + b.y + b.h - 1.02, f: () => this.drawBuildingSprite(ctx, sim, b, bc, hl, working) });
@@ -267,6 +288,11 @@ export class CityRenderer {
     for (const it of list) it.f();
     if (world.flags.has("rail")) this.drawMetroLoop(ctx, sim, speed, night);
 
+    if (weather === "rainy") {
+      // Wet-darkened building faces: a translucent cool wash over each visible silhouette.
+      for (const b of visibleBuildings) poly(ctx, buildingHull(b), "rgba(20,30,45,0.14)");
+    }
+
     if (this.lens !== "none") this.drawLens(ctx, sim);
     this.updateParticles(ctx, bc, realDt, speed);
     this.drawOverlays(ctx, sim, selected);
@@ -290,6 +316,12 @@ export class CityRenderer {
       ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * this.cam.x, dpr * this.cam.y);
       if (night > 0.08) this.drawLights(ctx, sim, bc, night);
     }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (weather === "rainy") drawRain(ctx, w, h, this.time);
+    else if (weather === "foggy") drawFog(ctx, w, h);
+    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * this.cam.x, dpr * this.cam.y);
+
     this.drawLabels(ctx, sim);
   }
 
@@ -366,6 +398,19 @@ export class CityRenderer {
       ctx.textBaseline = "alphabetic";
     }
     if (hl) poly(ctx, buildingHull(b), undefined, hl === 2 ? "#ffd84a" : "rgba(255,255,255,0.85)", hl === 2 ? 3 : 1.5);
+
+    // A brief gold shimmer the moment a building levels up.
+    const prevLevel = this.lastLevel.get(b.id);
+    if (prevLevel !== undefined && b.level > prevLevel) this.levelFlash.set(b.id, this.time);
+    this.lastLevel.set(b.id, b.level);
+    const flashSince = this.levelFlash.get(b.id);
+    if (flashSince !== undefined) {
+      const age = this.time - flashSince;
+      if (age < 2) {
+        const pulse = (0.5 + 0.5 * Math.sin(age * 7)) * (1 - age / 2);
+        poly(ctx, buildingHull(b), undefined, `rgba(233,196,106,${0.25 + 0.55 * pulse})`, 2 + pulse * 2.5);
+      } else this.levelFlash.delete(b.id);
+    }
   }
 
   /** Builds (and caches) the elevated Metro Loop's full path: the ring road, with a

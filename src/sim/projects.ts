@@ -68,7 +68,7 @@ export function updateProjects(sim: Sim) {
   const has = (id: ProjectId) => sim.projects.find((p) => p.id === id);
 
   // Feasibility: developments appear when the city creates the conditions for them
-  if (!has("mall") && sim.era >= 4 && s.income > 29 && sim.culture.localism < 58 && sim.metrics.economy > 50) {
+  if (!has("mall") && s.income > 29 && sim.culture.localism < 58 && sim.metrics.economy > 50) {
     const lot = findBigLot(sim.world, ["downtown", "suburbs", "residential"]);
     if (lot) {
       claimBigLot(sim.world, lot.x, lot.y);
@@ -81,7 +81,7 @@ export function updateProjects(sim: Sim) {
     }
   }
   const growth = s.population / Math.max(1, first.population);
-  if (!has("bridge") && sim.era >= 6 && (growth > 1.02 || s.landValue > 58) && sim.metrics.economy > 48) {
+  if (!has("bridge") && (growth > 1.02 || s.landValue > 58) && sim.metrics.economy > 48) {
     start(sim, "bridge", 4, null);
     story(sim, "A BRIDGE TO THE ISLAND", `With the city ${growth > 1.02 ? "growing" : "getting pricier"}, construction starts on Harbor Bridge to open the undeveloped East Island.`);
   }
@@ -90,23 +90,23 @@ export function updateProjects(sim: Sim) {
   const down = dist("downtown");
   const production = sim.businesses.filter((b) => !b.consumer && b.open && (b.type === "Factory" || b.type === "Logistics"));
   const output = production.reduce((a, b) => a + b.demand, 0) / Math.max(1, production.length);
-  if (!has("railway") && sim.era >= 8 && (s.population > 4700 || output > 110) && sim.metrics.economy > 50) {
+  if (!has("railway") && (s.population > 4700 || output > 110) && sim.metrics.economy > 50) {
     start(sim, "railway", 4, null);
     story(sim, "RAILWAY APPROVED", `${s.population > 4700 ? "A growing commuter population" : "Busy factories needing freight"} tips the balance: work begins on a railway along the city's northern edge.`);
   }
-  if (!has("metro") && sim.era >= 12 && s.population > 5000 && (down?.landValue ?? 0) > 64 && sim.metrics.economy > 54) {
+  if (!has("metro") && s.population > 5000 && (down?.landValue ?? 0) > 64 && sim.metrics.economy > 54) {
     start(sim, "metro", 5, null);
     story(sim, "METRO DIGS BEGIN", "Downtown streets are too crowded and land too valuable for more roads. Tunnelling starts on Metro Line 1.");
   }
-  if (!has("port") && sim.era >= 8 && output > 105 && (ind?.unemployment ?? 1) < 0.12) {
+  if (!has("port") && output > 105 && (ind?.unemployment ?? 1) < 0.12) {
     start(sim, "port", 4, null);
     story(sim, "PORT TO EXPAND", "Factories are shipping more than the docks can handle. New berths and container yards are going in.");
   }
-  if (!has("shipyard") && has("port")?.status === "done" && (ind?.skill ?? 0) > 0.42 && sim.era >= 12) {
+  if (!has("shipyard") && has("port")?.status === "done" && (ind?.skill ?? 0) > 0.42) {
     start(sim, "shipyard", 5, null);
     story(sim, "SHIPYARD PLANNED", "A skilled industrial workforce and a busier port attract a shipbuilder to the harbor.");
   }
-  if (!has("airport") && has("bridge")?.status === "done" && sim.era >= 14 && s.population > 5200 && s.income > 32) {
+  if (!has("airport") && has("bridge")?.status === "done" && s.population > 5200 && s.income > 32) {
     start(sim, "airport", 6, null);
     story(sim, "AN AIRPORT FOR THE CITY", "Tourists, business travel and a prosperous population make the case: land is being reclaimed north of Harborview for an airport.");
   }

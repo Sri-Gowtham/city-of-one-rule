@@ -30,6 +30,7 @@ import {
   DISTRICT_NAMES,
   addTree,
   buildIsland,
+  buildThemePark,
   findPath,
   findPlantSpot,
   generateWorld,
@@ -328,6 +329,8 @@ export class Sim {
   private bootstrapIsland() {
     const built = buildIsland(this.world, this.rng, 0);
     for (const b of built) if (b.kind !== "house" && b.kind !== "apartment" && b.kind !== "themepark") this.registerBusiness(b, "");
+    const park = buildThemePark(this.world, this.rng, 0);
+    for (const b of park) if (b.kind !== "themepark") this.registerBusiness(b, "");
     const housing = built.reduce((a, b) => a + (b.kind === "house" ? 16 : b.kind === "apartment" ? b.floors * 40 : 0), 0) * this.housingScale;
     const coast: DistrictState = {
       id: "coast",

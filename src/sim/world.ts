@@ -732,29 +732,10 @@ export function buildIsland(world: World, rng: Rng, era: number): Building[] {
     for (let x = ISLAND_X0; x <= ISLAND_X1; x++) set(x, y, "road");
   }
   const hotels = ["Seaview Hotel", "Harborview Suites", "The Lighthouse Inn", "Coral Bay Hotel", "Driftwood Lodge"];
-  const usableRows = rows.filter((r) => r + 1 + 3 <= ISLAND_Y1);
-  const themeParkRow = usableRows.length >= 2 ? usableRows[usableRows.length - 1] : null;
   let hi = 0;
   for (const r of rows) {
     const y0 = r + 1;
     if (y0 + 3 > ISLAND_Y1) break;
-    if (r === themeParkRow) {
-      // Adventure Cove: the island's theme park, reachable by the same bridge/metro/airport as the rest of Harborview.
-      const gate = addBuilding(world, rng, "themepark", ISLAND_X0 + 1, y0, 2, 1, "coast", "Adventure Cove", era);
-      built.push(gate);
-      set(ISLAND_X0 + 1, y0 + 1, "plaza");
-      set(ISLAND_X0 + 2, y0 + 1, "plaza");
-      world.props.push({ kind: "carousel", x: ISLAND_X0 + 1, y: y0 + 2, variant: 0 });
-      world.props.push({ kind: "coaster", x: ISLAND_X0 + 3, y: y0, variant: 0 });
-      world.props.push({ kind: "ferriswheel", x: ISLAND_X0 + 5, y: y0 + 1, variant: 0 });
-      for (let y = y0; y < Math.min(r + 6, ISLAND_Y1 + 1); y++)
-        for (const x of [ISLAND_X1 - 1, ISLAND_X1]) {
-          set(x, y, "park");
-          if (rng.chance(0.3)) addTree(world, rng, x, y, era * 24, true);
-        }
-      world.props.push({ kind: "bench", x: ISLAND_X1, y: y0 + 1, variant: 1 });
-      continue;
-    }
     const b1 = addBuilding(world, rng, "apartment", ISLAND_X0 + 1, y0, 2, 2, "coast", hotels[hi++ % hotels.length], era);
     b1.wall = rng.pick(["#f3e6cf", "#e9f1f4", "#f6dcc8"]);
     const kinds: BuildingKind[] = ["cafe", "restaurant", "shop", "house"];
@@ -785,6 +766,76 @@ export function buildIsland(world: World, rng: Rng, era: number): Building[] {
       world.outdoorSpots.push({ x: i % S, y: Math.floor(i / S) });
   }
   world.flags.add("bridge");
+  world.groundVersion++;
+  return built;
+}
+
+/**
+ * Adventure Cove: a big standalone theme park reclaimed from the open water south-west of
+ * downtown/Old Town/Central Park — the empty corner of the map, opposite Harborview. A short
+ * boardwalk (a couple of "walk" tiles across the one-tile water gap) connects it straight to
+ * the existing shoreline, so it needs no bridge project of its own; it's simply part of the
+ * city's edge, like the tree-lined border around the rest of downtown.
+ */
+export function buildThemePark(world: World, rng: Rng, era: number): Building[] {
+  const built: Building[] = [];
+  const set = (x: number, y: number, t: TileKind) => (world.tiles[idx(x, y)] = t);
+  const X0 = 3;
+  const X1 = 27;
+  const Y0 = MAIN - 1;
+  const Y1 = Y0 + 11;
+  for (let y = Y0; y <= Y1; y++) {
+    for (let x = X0; x <= X1; x++) {
+      const i = idx(x, y);
+      if (world.treeAt.has(i)) world.treeAt.delete(i);
+      const edge = x === X0 || x === X1 || y === Y1;
+      set(x, y, edge ? "sand" : "garden");
+      world.district[i] = "park";
+    }
+  }
+  world.trees = world.trees.filter((t) => world.treeAt.has(idx(t.x, t.y)));
+  // Boardwalk connecting the park straight to the city's south edge.
+  for (let x = X0 + 9; x <= X0 + 15; x++) set(x, MAIN - 2, "walk");
+  // A path spine down the middle and a cross-path, so citizens can actually reach every ride.
+  const midX = X0 + 12;
+  for (let y = Y0; y <= Y1; y++) set(midX, y, "path");
+  for (let x = X0 + 1; x <= X1 - 1; x++) set(x, Y0 + 5, "path");
+  const gate = addBuilding(world, rng, "themepark", midX - 1, Y0, 2, 1, "park", "Adventure Cove", era);
+  built.push(gate);
+  set(midX - 1, Y0 + 1, "plaza");
+  set(midX, Y0 + 1, "plaza");
+  world.props.push({ kind: "ferriswheel", x: midX + 5, y: Y0 + 3, variant: 0 });
+  world.props.push({ kind: "coaster", x: midX - 9, y: Y0 + 2, variant: 0 });
+  world.props.push({ kind: "coaster", x: midX + 6, y: Y0 + 8, variant: 1 });
+  world.props.push({ kind: "carousel", x: midX - 8, y: Y0 + 7, variant: 0 });
+  world.props.push({ kind: "carousel", x: midX + 2, y: Y0 + 9, variant: 1 });
+  world.props.push({ kind: "fountain", x: midX, y: Y0 + 5, variant: 0 });
+  const stalls: [number, number][] = [
+    [midX - 4, Y0 + 1],
+    [midX + 3, Y0 + 1],
+    [midX - 3, Y0 + 5],
+    [midX + 3, Y0 + 5],
+  ];
+  for (const [sx, sy] of stalls) built.push(addBuilding(world, rng, "kiosk", sx, sy, 1, 1, "park", "", era));
+  for (const [bx, by] of [
+    [midX - 6, Y0 + 4],
+    [midX + 8, Y0 + 2],
+    [midX - 2, Y0 + 9],
+    [midX + 6, Y0 + 5],
+  ])
+    world.props.push({ kind: "bench", x: bx, y: by, variant: bx % 2 });
+  for (let k = 0; k < 24; k++) {
+    const tx = X0 + 1 + Math.floor(rng.range(0, X1 - X0 - 1));
+    const ty = Y0 + 1 + Math.floor(rng.range(0, Y1 - Y0 - 1));
+    if (world.tiles[idx(tx, ty)] === "garden" && rng.chance(0.6)) addTree(world, rng, tx, ty, era * 24, true);
+  }
+  for (const b of built) b.door = findDoor(world, b);
+  for (let y = Y0; y <= Y1; y++)
+    for (let x = X0; x <= X1; x++) {
+      const i = idx(x, y);
+      if ((world.tiles[i] === "garden" || world.tiles[i] === "sand") && world.occupied[i] === -1) world.outdoorSpots.push({ x, y });
+    }
+  world.flags.add("themepark");
   world.groundVersion++;
   return built;
 }

@@ -39,6 +39,10 @@ const JOB_WEIGHT: Partial<Record<BuildingKind, number>> = {
   boutique: 2,
   repair: 2,
   workshop: 2,
+  skyscraper: 16,
+  theatre: 5,
+  stadium: 6,
+  themepark: 7,
 };
 
 const START_SHARE: Record<DistrictId, Cohorts> = {

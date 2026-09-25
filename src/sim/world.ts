@@ -83,7 +83,7 @@ const rep = <T>(n: number, v: T): T[] => Array.from({ length: n }, () => v);
 
 const QUEUES: Record<DistrictId, LotSpec[]> = {
   downtown: [
-    { t: "big", kind: "office", name: "Meridian Tower" },
+    { t: "big", kind: "skyscraper", name: "Meridian Tower" },
     { t: "big", kind: "bank", name: "Crestline Bank" },
     { t: "big", kind: "media", name: "CITYWIRE" },
     { t: "big", kind: "techco", name: "ByteForge" },
@@ -93,9 +93,9 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
     { t: "big", kind: "apartment", name: "Skyline Residences" },
     { t: "quad", kinds: ["shop", "cafe", "restaurant", "shop"] },
     { t: "big", kind: "office", name: "Civic Tower" },
-    { t: "big", kind: "office", name: "Summit Plaza" },
+    { t: "big", kind: "skyscraper", name: "Summit Plaza" },
     { t: "big", kind: "techco", name: "Nimbus Systems" },
-    { t: "big", kind: "cinema", name: "Grand Odeon" },
+    { t: "big", kind: "theatre", name: "Grand Odeon Theatre" },
     { t: "big", kind: "apartment" },
     { t: "empty" },
   ],
@@ -108,13 +108,13 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
     ...rep<LotSpec>(5, { t: "big", kind: "apartment" }),
     ...rep<LotSpec>(6, { t: "quad", kinds: H4 }),
     { t: "quad", kinds: ["shop", "house", "cafe", "house"] },
-    { t: "empty" },
+    { t: "pocket" },
     { t: "empty" },
   ],
   suburbs: [
     ...rep<LotSpec>(8, { t: "pair" }),
     { t: "big", kind: "mall", name: "Northgate Mall" },
-    { t: "quad", kinds: H4 },
+    { t: "big", kind: "stadium", name: "Northgate Stadium" },
     { t: "quad", kinds: H4 },
     { t: "empty" },
   ],
@@ -152,7 +152,9 @@ const QUEUES: Record<DistrictId, LotSpec[]> = {
     { t: "quad", kinds: H4 },
     { t: "quad", kinds: H4 },
     ...rep<LotSpec>(3, { t: "yard" }),
-    ...rep<LotSpec>(3, { t: "empty" }),
+    { t: "pocket" },
+    { t: "pocket" },
+    { t: "empty" },
   ],
   park: [],
   coast: [],
@@ -188,6 +190,10 @@ const FLOORS: Record<BuildingKind, [number, number]> = {
   firestation: [1, 2],
   hospital: [3, 5],
   terminal: [2, 2],
+  stadium: [1, 1],
+  theatre: [2, 2],
+  skyscraper: [16, 24],
+  themepark: [1, 1],
 };
 
 const WALLS: Partial<Record<BuildingKind, string[]>> = {
@@ -197,6 +203,8 @@ const WALLS: Partial<Record<BuildingKind, string[]>> = {
   cafe: ["#b98460"],
   restaurant: ["#a8484b"],
   office: ["#88aecf", "#9cb9cf", "#7d9fbe"],
+  skyscraper: ["#a9d8e0", "#8fc7e6", "#bfe3ea", "#9fd0d6"],
+  theatre: ["#7a3b52", "#8a4560", "#6b3348"],
 };
 
 const BASE_COLORS: Record<BuildingKind, [string, string, string]> = {
@@ -229,6 +237,10 @@ const BASE_COLORS: Record<BuildingKind, [string, string, string]> = {
   boutique: ["#2f2f38", "#1d1d24", "#d9b44a"],
   repair: ["#6f8a5a", "#3f4a37", "#f2d06b"],
   workshop: ["#b08b62", "#5a4632", "#e8d4ae"],
+  stadium: ["#c9d1da", "#5f6f80", "#3fa06a"],
+  theatre: ["#7a3b52", "#3c1d2c", "#d9b44a"],
+  skyscraper: ["#a9d8e0", "#3a5a68", "#eafcff"],
+  themepark: ["#ff8fb1", "#c94f77", "#ffe066"],
 };
 
 const BLOCKED: ReadonlySet<TileKind> = new Set<TileKind>(["water", "pond"]);
@@ -720,10 +732,29 @@ export function buildIsland(world: World, rng: Rng, era: number): Building[] {
     for (let x = ISLAND_X0; x <= ISLAND_X1; x++) set(x, y, "road");
   }
   const hotels = ["Seaview Hotel", "Harborview Suites", "The Lighthouse Inn", "Coral Bay Hotel", "Driftwood Lodge"];
+  const usableRows = rows.filter((r) => r + 1 + 3 <= ISLAND_Y1);
+  const themeParkRow = usableRows.length >= 2 ? usableRows[usableRows.length - 1] : null;
   let hi = 0;
   for (const r of rows) {
     const y0 = r + 1;
     if (y0 + 3 > ISLAND_Y1) break;
+    if (r === themeParkRow) {
+      // Adventure Cove: the island's theme park, reachable by the same bridge/metro/airport as the rest of Harborview.
+      const gate = addBuilding(world, rng, "themepark", ISLAND_X0 + 1, y0, 2, 1, "coast", "Adventure Cove", era);
+      built.push(gate);
+      set(ISLAND_X0 + 1, y0 + 1, "plaza");
+      set(ISLAND_X0 + 2, y0 + 1, "plaza");
+      world.props.push({ kind: "carousel", x: ISLAND_X0 + 1, y: y0 + 2, variant: 0 });
+      world.props.push({ kind: "coaster", x: ISLAND_X0 + 3, y: y0, variant: 0 });
+      world.props.push({ kind: "ferriswheel", x: ISLAND_X0 + 5, y: y0 + 1, variant: 0 });
+      for (let y = y0; y < Math.min(r + 6, ISLAND_Y1 + 1); y++)
+        for (const x of [ISLAND_X1 - 1, ISLAND_X1]) {
+          set(x, y, "park");
+          if (rng.chance(0.3)) addTree(world, rng, x, y, era * 24, true);
+        }
+      world.props.push({ kind: "bench", x: ISLAND_X1, y: y0 + 1, variant: 1 });
+      continue;
+    }
     const b1 = addBuilding(world, rng, "apartment", ISLAND_X0 + 1, y0, 2, 2, "coast", hotels[hi++ % hotels.length], era);
     b1.wall = rng.pick(["#f3e6cf", "#e9f1f4", "#f6dcc8"]);
     const kinds: BuildingKind[] = ["cafe", "restaurant", "shop", "house"];

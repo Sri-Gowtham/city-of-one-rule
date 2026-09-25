@@ -93,7 +93,11 @@ export type BuildingKind =
   | "police"
   | "firestation"
   | "hospital"
-  | "terminal";
+  | "terminal"
+  | "stadium"
+  | "theatre"
+  | "skyscraper"
+  | "themepark";
 
 export type AgeBand = "youth" | "adult" | "elder";
 export type Accessory = "none" | "backpack" | "badge" | "helmet" | "coat" | "vest";
@@ -409,7 +413,10 @@ export interface Prop {
     | "metro"
     | "containers"
     | "shipyard"
-    | "tower";
+    | "tower"
+    | "ferriswheel"
+    | "carousel"
+    | "coaster";
   x: number;
   y: number;
   variant: number;

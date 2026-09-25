@@ -916,6 +916,69 @@ export class CityRenderer {
         ctx.fillRect(base[0] - 1.5, base[1] - 64, 3, 3);
         break;
       }
+      case "ferriswheel": {
+        const c = iso(p.x + 0.5, p.y + 0.5, 34);
+        const r = 30;
+        line(ctx, [c[0], c[1] - r - 12], [c[0], c[1] + 8], "#7a7f87", 2);
+        line(ctx, [c[0] - 14, c[1] + 8], [c[0] + 14, c[1] + 8], "#7a7f87", 3);
+        ctx.strokeStyle = "#c9ced4";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(c[0], c[1] - r, r, r * 0.62, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        const spin = this.time * 0.4;
+        const cabinColors = ["#e0463a", "#3d6fb6", "#f2c14e", "#3fa06a", "#8a5a9a", "#e07b39"];
+        for (let k = 0; k < 8; k++) {
+          const a = spin + (k / 8) * Math.PI * 2;
+          const cx = c[0] + Math.cos(a) * r;
+          const cy = c[1] - r + Math.sin(a) * r * 0.62;
+          line(ctx, [c[0], c[1] - r], [cx, cy], "rgba(150,150,150,0.5)", 1);
+          ctx.fillStyle = cabinColors[k % cabinColors.length];
+          ctx.fillRect(cx - 2.4, cy - 2.4, 4.8, 4.8);
+        }
+        break;
+      }
+      case "carousel": {
+        const c = iso(p.x + 0.5, p.y + 0.5, 0);
+        box(ctx, p.x + 0.15, p.y + 0.15, 0.7, 0.7, 0, 3, "#e9e4d8");
+        const top = iso(p.x + 0.5, p.y + 0.5, 20);
+        for (let k = 0; k < 8; k++) {
+          const a0 = (k / 8) * Math.PI * 2;
+          const a1 = ((k + 1) / 8) * Math.PI * 2;
+          poly(
+            ctx,
+            [top, [top[0] + Math.cos(a0) * 22, top[1] + Math.sin(a0) * 11], [top[0] + Math.cos(a1) * 22, top[1] + Math.sin(a1) * 11]],
+            k % 2 ? "#ff8fb1" : "#ffe066",
+          );
+        }
+        const spin = this.time * 0.9;
+        for (let k = 0; k < 6; k++) {
+          const a = spin + (k / 6) * Math.PI * 2;
+          const hx = c[0] + Math.cos(a) * 14;
+          const hy = c[1] + Math.sin(a) * 7 - 3;
+          line(ctx, [hx, hy - 10], [hx, hy], "#c9a33a", 1.2);
+          ctx.fillStyle = ["#e0463a", "#3d6fb6", "#3fa06a"][k % 3];
+          ctx.beginPath();
+          ctx.ellipse(hx, hy, 3, 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case "coaster": {
+        const base = iso(p.x, p.y + 1);
+        ctx.strokeStyle = "#d8433b";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(base[0] - 20, base[1]);
+        ctx.bezierCurveTo(base[0] - 10, base[1] - 46, base[0] + 10, base[1] - 46, base[0] + 8, base[1] - 8);
+        ctx.bezierCurveTo(base[0] + 4, base[1] + 4, base[0] + 24, base[1] - 4, base[0] + 30, base[1] - 20);
+        ctx.stroke();
+        for (let k = 0; k < 5; k++) {
+          const bx = base[0] - 20 + k * 12;
+          line(ctx, [bx, base[1]], [bx, base[1] + 6], "#8a5a35", 2);
+        }
+        break;
+      }
       case "hydrant": {
         const base = iso(p.x + 0.5, p.y + 0.5);
         ctx.fillStyle = "#c0392b";

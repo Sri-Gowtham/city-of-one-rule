@@ -35,6 +35,10 @@ const FLOOR_H: Partial<Record<BuildingKind, number>> = {
   police: 15,
   firestation: 18,
   hospital: 14,
+  stadium: 22,
+  theatre: 16,
+  skyscraper: 13,
+  themepark: 12,
 };
 
 const MATERIAL: Record<BuildingKind, Material> = {
@@ -67,6 +71,10 @@ const MATERIAL: Record<BuildingKind, Material> = {
   firestation: "brick",
   hospital: "concrete",
   terminal: "glass",
+  stadium: "concrete",
+  theatre: "stone",
+  skyscraper: "glass",
+  themepark: "siding",
 };
 
 const EMBLEM: Partial<Record<BuildingKind, string>> = {
@@ -91,6 +99,9 @@ const EMBLEM: Partial<Record<BuildingKind, string>> = {
   firestation: "🚒",
   hospital: "🏥",
   terminal: "✈️",
+  stadium: "⚽",
+  theatre: "🎭",
+  themepark: "🎡",
 };
 
 const STOREFRONT: ReadonlySet<BuildingKind> = new Set<BuildingKind>(["shop", "cafe", "restaurant", "boutique", "repair", "workshop"]);
@@ -917,6 +928,69 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
           k % 2 ? "#ffffff" : "#d8433b",
         );
       }
+      break;
+    }
+    case "stadium": {
+      const top: Pt[] = [up(N, H), up(E, H), up(S, H), up(W, H)];
+      const ctr = iso(x + w / 2, y + h / 2, H);
+      poly(ctx, top, "#5a8a52");
+      const inner = top.map((p) => lerp(p, ctr, 0.2));
+      poly(ctx, inner, "#3fa06a", "rgba(255,255,255,0.55)", 1.4);
+      const pitch = top.map((p) => lerp(p, ctr, 0.42));
+      poly(ctx, pitch, "#4a9a5c", "rgba(255,255,255,0.4)", 1);
+      line(ctx, lerp(pitch[0], pitch[1], 0.5), lerp(pitch[3], pitch[2], 0.5), "rgba(255,255,255,0.4)", 1);
+      for (const corner of [up(N, H), up(E, H), up(S, H), up(W, H)]) {
+        line(ctx, corner, [corner[0], corner[1] - 24], "#555", 1.4);
+        ctx.fillStyle = "#f2f2e6";
+        ctx.fillRect(corner[0] - 5, corner[1] - 28, 10, 4);
+      }
+      break;
+    }
+    case "theatre": {
+      windows("R", h * 2, b.floors, 0.45, 0.5);
+      const plinth = quad(L, 0, 1, 0, 0.1);
+      poly(ctx, plinth, shade(wall, -0.15));
+      for (let k = 0; k < 5; k++) {
+        const u = 0.1 + k * 0.19;
+        poly(ctx, quad(L, u, u + 0.07, 0.1, 0.72), "#f2e6d8");
+        poly(ctx, quad(L, u + 0.05, u + 0.07, 0.1, 0.72), "rgba(0,0,0,0.14)");
+      }
+      const band = quad(L, 0.03, 0.97, 0.74, 0.9);
+      poly(ctx, band, accent, "rgba(0,0,0,0.25)", 0.8);
+      faceText(ctx, b.name.toUpperCase(), L(0.5, 0.82), "L", 8, "#3c1d2c", 800);
+      flatRoof(shade(wall, 0.18));
+      break;
+    }
+    case "skyscraper": {
+      windows("L", w * 3, b.floors, 0.85, 0.72, false, "#bfe3ea");
+      windows("R", h * 3, b.floors, 0.85, 0.72, false, "#9fd0d6");
+      flatRoof(shade(b.roof, 0.2));
+      box(ctx, x + w * 0.28, y + h * 0.28, w * 0.44, h * 0.44, H, 20, shade(wall, 0.12), shade(wall, 0.3));
+      const spire = iso(x + w / 2, y + h / 2, H + 20);
+      line(ctx, spire, [spire[0], spire[1] - 36], "#c9a33a", 2);
+      ctx.fillStyle = "#ff5a4a";
+      ctx.beginPath();
+      ctx.arc(spire[0], spire[1] - 36, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case "themepark": {
+      poly(ctx, quad(L, 0.06, 0.94, 0, 0.55), "#ff8fb1");
+      const a = L(0.06, 0.55);
+      const bb = L(0.94, 0.55);
+      const arcTop: Pt = [(a[0] + bb[0]) / 2, Math.min(a[1], bb[1]) - 16];
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.quadraticCurveTo(arcTop[0], arcTop[1], bb[0], bb[1]);
+      ctx.strokeStyle = "#c94f77";
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      faceText(ctx, b.name.toUpperCase(), L(0.5, 0.42), "L", 8, "#ffffff", 800);
+      for (let k = 0; k < 5; k++) {
+        const p = L(0.1 + k * 0.2, 0.58);
+        poly(ctx, [p, [p[0] + 4, p[1] - 6], [p[0] - 4, p[1] - 6]], k % 2 ? "#ffe066" : "#3d6fb6");
+      }
+      flatRoof("#ffe066");
       break;
     }
   }

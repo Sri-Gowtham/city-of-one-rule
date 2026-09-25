@@ -65,11 +65,24 @@ const STAR_CLUSTERS: readonly (readonly [number, number, number])[] = [
  */
 export function drawSky(ctx: CanvasRenderingContext2D, hour: number, w: number, h: number, horizonY: number) {
   const sky = skyAt(hour);
-  const g = ctx.createLinearGradient(0, 0, 0, h);
+  const g = ctx.createLinearGradient(0, 0, 0, horizonY);
   g.addColorStop(0, sky.top);
   g.addColorStop(1, sky.bottom);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(0, 0, w, horizonY);
+
+  // Sea fill below the horizon: this is what makes the city read as sitting IN the water
+  // rather than floating — anywhere the isometric map bitmap doesn't cover (the corners
+  // outside the diamond) still needs to show open water, not more sky, all the way to the
+  // bottom of the canvas.
+  if (horizonY < h) {
+    const sea = ctx.createLinearGradient(0, horizonY, 0, h);
+    sea.addColorStop(0, sky.horizon);
+    sea.addColorStop(0.12, mix(sky.horizon, "#1c4a68", 0.6));
+    sea.addColorStop(1, mix("#132f45", "#0b1a28", nightAmount(hour)));
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, horizonY, w, h - horizonY);
+  }
 
   const night = nightAmount(hour);
 

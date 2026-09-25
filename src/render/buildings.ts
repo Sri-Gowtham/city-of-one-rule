@@ -400,7 +400,7 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     }
   };
 
-  const storefront = (va: number) => {
+  const storefront = (va: number, awning = true) => {
     const frame = quad(L, 0.1, 0.9, 0.03, va * 0.92);
     poly(ctx, frame, "#2e2a27");
     const glass = inset(frame, 0.06);
@@ -417,6 +417,14 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     if (closed) {
       line(ctx, glass[0], glass[2], "#2b221b", 1.5);
       line(ctx, glass[1], glass[3], "#2b221b", 1.5);
+      return;
+    }
+    if (!awning) {
+      // Clean modern front: a slim glass canopy instead of the striped fabric awning.
+      const out: Pt = [(-TW / 2) * 0.14, (TH / 2) * 0.14];
+      const e0 = L(0.06, va);
+      const e1 = L(0.94, va);
+      poly(ctx, [e0, e1, [e1[0] + out[0], e1[1] + out[1]], [e0[0] + out[0], e0[1] + out[1]]], "rgba(180,205,220,0.85)", "rgba(0,0,0,0.2)", 0.8);
       return;
     }
     const out: Pt = [(-TW / 2) * 0.24, (TH / 2) * 0.24];
@@ -566,11 +574,19 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
     case "boutique":
     case "repair":
     case "workshop": {
+      const modernFront = rnd(0, 111) < 0.4;
       const va = Math.min(0.7, 0.75 / b.floors);
       if (b.floors > 1) windows("L", w * 2, b.floors, 0.5, 0.45, true);
       windows("R", h * 2, b.floors, 0.45, 0.45, false);
-      storefront(va);
-      flatRoof(shade(b.roof, 0.1));
+      storefront(va, !modernFront);
+      if (modernFront) {
+        // A low parapet instead of a plain flat roof, to match the cleaner front below.
+        const top = [up(N, H + 3), up(E, H + 3), up(S, H + 3), up(W, H + 3)];
+        poly(ctx, top, shade(b.roof, 0.15));
+        line(ctx, up(W, H + 3), up(S, H + 3), shade(accent, -0.1), 1.6);
+      } else {
+        flatRoof(shade(b.roof, 0.1));
+      }
       line(ctx, up(W, H - 2), up(S, H - 2), shade(accent, -0.1), 2.5);
       if (kind === "boutique") line(ctx, up(W, H - 5), up(S, H - 5), "#d9b44a", 1.5);
       const sign = L(0.5, Math.min(0.97, va + 0.18));

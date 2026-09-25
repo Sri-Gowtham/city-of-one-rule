@@ -29,6 +29,7 @@ import { COMBOS, RULES, fxOf, paramsFor, ruleById } from "./rules";
 import {
   DISTRICT_NAMES,
   addTree,
+  buildIsland,
   findPath,
   findPlantSpot,
   generateWorld,
@@ -313,6 +314,37 @@ export class Sim {
     this.unlocked = new Set(RULES.filter((r) => !r.unlock).map((r) => r.id));
     this.calibrate();
     initDistricts(this);
+    this.bootstrapIsland();
+  }
+
+  /**
+   * Harborview — the bridge, its waterfront and the Adventure Cove theme park — used to only
+   * appear once a "bridge" project completed mid-game. Players couldn't see or reach it for
+   * days. It's now part of the city from day one: this mirrors what the bridge project used to
+   * do on completion (place the island, register its businesses, add its district), except run
+   * once here instead of waiting on population/land-value thresholds. A completed "bridge"
+   * project is recorded so the normal project pipeline never tries to build it again.
+   */
+  private bootstrapIsland() {
+    const built = buildIsland(this.world, this.rng, 0);
+    for (const b of built) if (b.kind !== "house" && b.kind !== "apartment" && b.kind !== "themepark") this.registerBusiness(b, "");
+    const housing = built.reduce((a, b) => a + (b.kind === "house" ? 16 : b.kind === "apartment" ? b.floors * 40 : 0), 0) * this.housingScale;
+    const coast: DistrictState = {
+      id: "coast",
+      pop: { children: 0, students: 0, young: housing * 0.08, adults: housing * 0.06, elderly: 0 },
+      housing,
+      jobs: 0,
+      education: 0.45,
+      skill: 0.45,
+      income: 28,
+      landValue: 58,
+      unemployment: 0.05,
+      attract: 0.6,
+      netMigration: 0,
+      condition: 0.9,
+    };
+    this.districts.push(coast);
+    this.projects.push({ id: "bridge", status: "done", daysLeft: 0, totalDays: 1, startedEra: 0, buildingId: null });
   }
 
   get endless() {

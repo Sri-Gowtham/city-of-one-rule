@@ -451,44 +451,72 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       bc.lamps.push(lamp);
       const rh = 15;
       const roof = b.shared ? "#35a39a" : b.roof;
-      const A = iso(x, y + h / 2, H + rh);
-      const B = iso(x + w, y + h / 2, H + rh);
-      const eW = iso(x - 0.06, y + h + 0.06, H - 1);
-      const eS = iso(x + w + 0.06, y + h + 0.06, H - 1);
-      poly(ctx, [up(N, H), up(E, H), B, A], shade(roof, -0.25));
-      poly(ctx, [eW, eS, B, A], roof);
-      ctx.beginPath();
-      for (let t = 0.14; t < 1; t += 0.14) {
-        const a = lerp(eW, A, t);
-        const c = lerp(eS, B, t);
-        ctx.moveTo(a[0], a[1]);
-        ctx.lineTo(c[0], c[1]);
+      const roofStyle = rnd(0, 90);
+      if (roofStyle < 0.55) {
+        // Classic gable, ridge running the length of the house.
+        const A = iso(x, y + h / 2, H + rh);
+        const B = iso(x + w, y + h / 2, H + rh);
+        const eW = iso(x - 0.06, y + h + 0.06, H - 1);
+        const eS = iso(x + w + 0.06, y + h + 0.06, H - 1);
+        poly(ctx, [up(N, H), up(E, H), B, A], shade(roof, -0.25));
+        poly(ctx, [eW, eS, B, A], roof);
+        ctx.beginPath();
+        for (let t = 0.14; t < 1; t += 0.14) {
+          const a = lerp(eW, A, t);
+          const c = lerp(eS, B, t);
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(c[0], c[1]);
+        }
+        ctx.strokeStyle = "rgba(0,0,0,0.18)";
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+        line(ctx, eW, eS, "rgba(0,0,0,0.35)", 1.2);
+        line(ctx, A, B, shade(roof, 0.2), 1.4);
+        poly(ctx, [up(E, H), up(S, H), B], shade(wall, -0.3));
+        box(ctx, x + 0.62, y + 0.2, 0.14, 0.14, H + 6, 13, "#8a5a45");
+      } else if (roofStyle < 0.8) {
+        // Hip roof: all four sides slope to a single apex.
+        const apex = iso(x + w / 2, y + h / 2, H + rh);
+        poly(ctx, [up(N, H), up(E, H), apex], shade(roof, -0.15));
+        poly(ctx, [up(E, H), up(S, H), apex], shade(roof, -0.3));
+        poly(ctx, [up(S, H), up(W, H), apex], shade(roof, 0.06));
+        poly(ctx, [up(W, H), up(N, H), apex], shade(roof, -0.08));
+        line(ctx, up(N, H), apex, "rgba(0,0,0,0.2)", 0.8);
+        line(ctx, up(E, H), apex, "rgba(0,0,0,0.2)", 0.8);
+        box(ctx, x + 0.62, y + 0.2, 0.14, 0.14, H + 6, 10, "#8a5a45");
+      } else {
+        // Flat modern roof with a low parapet and a small rail.
+        const top = [up(N, H + 4), up(E, H + 4), up(S, H + 4), up(W, H + 4)];
+        poly(ctx, top, shade(roof, 0.15));
+        line(ctx, up(W, H + 4), up(S, H + 4), shade(roof, -0.2), 1.4);
+        line(ctx, up(S, H + 4), up(E, H + 4), shade(roof, -0.35), 1.4);
+        line(ctx, up(N, H), up(N, H + 4), shade(wall, -0.1), 1.2);
+        line(ctx, up(S, H), up(S, H + 4), shade(wall, -0.2), 1.2);
       }
-      ctx.strokeStyle = "rgba(0,0,0,0.18)";
-      ctx.lineWidth = 0.7;
-      ctx.stroke();
-      line(ctx, eW, eS, "rgba(0,0,0,0.35)", 1.2);
-      line(ctx, A, B, shade(roof, 0.2), 1.4);
-      poly(ctx, [up(E, H), up(S, H), B], shade(wall, -0.3));
-      box(ctx, x + 0.62, y + 0.2, 0.14, 0.14, H + 6, 13, "#8a5a45");
       break;
     }
     case "apartment": {
-      windows("L", w * 3, b.floors, 0.5, 0.42);
-      windows("R", h * 3, b.floors, 0.5, 0.42);
-      const out: Pt = [(-TW / 2) * 0.1, (TH / 2) * 0.1];
-      for (let r = 1; r < b.floors; r++) {
-        for (let c = 0; c < w * 3; c += 2) {
-          const cu = (c + 0.5) / (w * 3);
-          const a = L(cu - 0.12, (r + 0.25) / b.floors);
-          const d = L(cu + 0.12, (r + 0.25) / b.floors);
-          poly(ctx, [a, d, [d[0] + out[0], d[1] + out[1]], [a[0] + out[0], a[1] + out[1]]], "#cfc9bd", "rgba(0,0,0,0.25)", 0.5);
-          line(ctx, [a[0] + out[0], a[1] + out[1] - 5], [d[0] + out[0], d[1] + out[1] - 5], "rgba(60,60,60,0.7)", 0.8);
+      // About a third of apartment blocks read as a plainer, more modern tower instead of
+      // the classic balconied slab — same footprint rules, a different silhouette.
+      const modern = rnd(0, 95) < 0.32;
+      windows("L", w * 3, b.floors, 0.5, 0.42, false, modern ? "#cfe6ee" : undefined);
+      windows("R", h * 3, b.floors, 0.5, 0.42, false, modern ? "#bcd8e2" : undefined);
+      if (!modern) {
+        const out: Pt = [(-TW / 2) * 0.1, (TH / 2) * 0.1];
+        for (let r = 1; r < b.floors; r++) {
+          for (let c = 0; c < w * 3; c += 2) {
+            const cu = (c + 0.5) / (w * 3);
+            const a = L(cu - 0.12, (r + 0.25) / b.floors);
+            const d = L(cu + 0.12, (r + 0.25) / b.floors);
+            poly(ctx, [a, d, [d[0] + out[0], d[1] + out[1]], [a[0] + out[0], a[1] + out[1]]], "#cfc9bd", "rgba(0,0,0,0.25)", 0.5);
+            line(ctx, [a[0] + out[0], a[1] + out[1] - 5], [d[0] + out[0], d[1] + out[1] - 5], "rgba(60,60,60,0.7)", 0.8);
+          }
         }
       }
       if (w > 1) canopy();
       flatRoof(shade(b.roof, 0.1));
-      box(ctx, x + w * 0.62, y + h * 0.55, 0.25, 0.25, H, 12, "#9aa3ad");
+      if (modern && w > 1) box(ctx, x + w * 0.18, y + h * 0.18, w * 0.64, h * 0.64, H, 11, shade(wall, 0.12), shade(wall, 0.28));
+      else box(ctx, x + w * 0.62, y + h * 0.55, 0.25, 0.25, H, 12, "#9aa3ad");
       break;
     }
     case "office":
@@ -515,10 +543,20 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
         emoji(ctx, EMBLEM.techco!, [ctr[0], ctr[1] - 12], 12);
       } else {
         flatRoof(shade(b.roof, 0.15));
-        const t = iso(x + w * 0.7, y + h * 0.3, H);
-        line(ctx, t, up(t, 24), "#555", 1.5);
-        ctx.fillStyle = "#e0463a";
-        ctx.fillRect(t[0] - 1.5, t[1] - 26, 3, 3);
+        if (w > 1 && rnd(0, 71) < 0.4) {
+          // Setback crown: gives some office towers a tiered silhouette from day one,
+          // instead of only the tallest, longest-standing buildings looking distinct.
+          box(ctx, x + w * 0.22, y + h * 0.22, w * 0.56, h * 0.56, H, 16, shade(wall, 0.08), shade(wall, 0.25));
+          const t = iso(x + w / 2, y + h / 2, H + 16);
+          line(ctx, t, up(t, 20), "#555", 1.4);
+          ctx.fillStyle = "#e0463a";
+          ctx.fillRect(t[0] - 1.3, t[1] - 22, 2.6, 2.6);
+        } else {
+          const t = iso(x + w * 0.7, y + h * 0.3, H);
+          line(ctx, t, up(t, 24), "#555", 1.5);
+          ctx.fillStyle = "#e0463a";
+          ctx.fillRect(t[0] - 1.5, t[1] - 26, 3, 3);
+        }
       }
       break;
     }

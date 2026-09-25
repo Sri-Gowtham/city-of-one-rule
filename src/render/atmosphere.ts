@@ -86,12 +86,16 @@ export function drawSky(ctx: CanvasRenderingContext2D, hour: number, w: number, 
 
   const night = nightAmount(hour);
 
-  // Sun (day) and moon (night) share one arc across the upper sky.
+  // Sun (day) and moon (night) share one arc across the upper sky. The arc's own baseline is
+  // capped well above the true horizon (which, at the game's usual zoomed-out camera, sits
+  // almost at the bottom of the canvas): swinging the sun all the way down to it made the sky
+  // feel like it was swooping in close to the city rather than sitting believably far away.
+  const skyLine = Math.min(horizonY, h * 0.5);
   const dayT = clamp01((hour - 6) / 12);
   const nightHour = hour >= 18 ? hour - 18 : hour + 6;
   const moonT = clamp01(nightHour / 12);
   const arcX = (t: number) => w * (0.08 + t * 0.84);
-  const arcY = (t: number) => horizonY - Math.sin(Math.PI * t) * horizonY * 0.92;
+  const arcY = (t: number) => skyLine - Math.sin(Math.PI * t) * skyLine * 0.82;
 
   if (night < 1) {
     const edge = smooth(clamp01(Math.min(dayT, 1 - dayT) * 6));

@@ -74,7 +74,7 @@ function tone(freq: number, dur: number, type: OscillatorType, vol: number, dela
   o.stop(t + dur + 0.05);
 }
 
-export type Cue = "help" | "crime" | "protest" | "emergent" | "rule" | "paper" | "click" | "opening";
+export type Cue = "help" | "crime" | "protest" | "emergent" | "rule" | "paper" | "click" | "opening" | "construction" | "grandopening";
 
 export function play(cue: Cue) {
   switch (cue) {
@@ -94,6 +94,16 @@ export function play(cue: Cue) {
     case "opening":
       tone(660, 0.2, "triangle", 0.05);
       tone(990, 0.3, "triangle", 0.05, 0.12);
+      break;
+    case "construction":
+      tone(220, 0.09, "square", 0.06, 0);
+      tone(220, 0.09, "square", 0.06, 0.14);
+      tone(180, 0.16, "square", 0.05, 0.3);
+      break;
+    case "grandopening":
+      [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, "triangle", 0.07, i * 0.1));
+      [0.4, 0.5, 0.6, 0.7, 0.8].forEach((d) => tone(1800 + Math.random() * 900, 0.18, "sine", 0.05, d));
+      tone(1568, 0.8, "sine", 0.06, 0.45, 1.3);
       break;
     case "rule":
       [392, 523, 659, 784].forEach((f, i) => tone(f, 0.7, "sine", 0.07, i * 0.07));

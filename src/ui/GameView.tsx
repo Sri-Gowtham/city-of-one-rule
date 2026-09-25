@@ -44,12 +44,32 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
     }
   });
   const seenEvent = useRef(0);
+  const [toast, setToast] = useState<{ icon: string; text: string; big: boolean } | null>(null);
+  const toastTimer = useRef<number | null>(null);
   renderer.lens = lens;
 
   useEffect(() => {
     setHumForHour(sim.hour, sim.phase === "running");
     const fresh = sim.events.filter((e) => e.id > seenEvent.current);
     if (fresh.length) seenEvent.current = fresh[fresh.length - 1].id;
+    if (!fresh.length) return;
+
+    // Construction milestones are rare and important: always notify, even
+    // mid-speed-run or when many other events fired the same tick.
+    const opened = fresh.find((e) => e.kind === "grand-opening");
+    const started = fresh.find((e) => e.kind === "construction");
+    if (opened) {
+      play("grandopening");
+      setToast({ icon: "🎉", text: opened.text.replace(/^🎉\s*/, ""), big: true });
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      toastTimer.current = window.setTimeout(() => setToast(null), 5500);
+    } else if (started) {
+      play("construction");
+      setToast({ icon: "🏗️", text: started.text.replace(/^🏗️\s*/, ""), big: false });
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      toastTimer.current = window.setTimeout(() => setToast(null), 4000);
+    }
+
     if (fresh.length > 6 || speed > 4) return;
     const kinds = new Set(fresh.map((e) => e.kind));
     if (kinds.has("emergent") || kinds.has("combo")) play("emergent");
@@ -132,6 +152,12 @@ export function GameView({ sim, onRestart }: { sim: Sim; onRestart: () => void }
         }}
       />
       <div className="stage">
+        {toast && (
+          <div className={`dev-toast ${toast.big ? "big" : ""}`}>
+            <span className="dev-toast-icon">{toast.icon}</span>
+            <span>{toast.text}</span>
+          </div>
+        )}
         <CityCanvas
           sim={sim}
           renderer={renderer}

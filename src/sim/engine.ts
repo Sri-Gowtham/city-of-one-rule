@@ -1707,7 +1707,9 @@ export class Sim {
           (P.wasteTax ? 3 : 0) -
           (this.world.flags.has("port") ? 3 : 0) -
           (this.world.flags.has("shipyard") ? 2 : 0) -
-          (this.world.flags.has("airport") ? 4 : 0),
+          (this.world.flags.has("airport") ? 4 : 0) -
+          (this.world.flags.has("port-2-open") ? 2 : 0) -
+          (this.world.flags.has("airport-2-open") ? 3 : 0),
       ),
     };
     for (const k of Object.keys(target) as MetricKey[]) {

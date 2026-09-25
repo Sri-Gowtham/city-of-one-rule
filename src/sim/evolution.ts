@@ -217,12 +217,15 @@ export function evolveCity(sim: Sim) {
   }
   const inf = infra(sim);
   const jobBoost: Record<string, number> = {
-    industrial: 1 + (inf.port ? 0.15 : 0) + (inf.shipyard ? 0.2 : 0) + (inf.rail ? 0.05 : 0),
-    coast: 1 + (inf.airport ? 0.5 : 0),
+    industrial: 1 + (inf.port ? 0.15 : 0) + (inf.shipyard ? 0.2 : 0) + (inf.rail ? 0.05 : 0) + (inf.port2 ? 0.15 : 0),
+    coast: 1 + (inf.airport ? 0.5 : 0) + (inf.airport2 ? 0.3 : 0),
     downtown: 1 + (inf.airport ? 0.05 : 0) + (inf.metro ? 0.05 : 0),
+    oldtown: 1 + (inf.metro2 ? 0.06 : 0),
+    suburbs: 1 + (inf.metro2 ? 0.06 : 0),
   };
   if (inf.port) pollution.industrial = (pollution.industrial ?? 0) + 1;
   if (inf.shipyard) pollution.industrial = (pollution.industrial ?? 0) + 1;
+  if (inf.port2) pollution.industrial = (pollution.industrial ?? 0) + 1;
   let cityJobs = 0;
   let cityWorkers = 0;
   for (const d of sim.districts) {
@@ -370,7 +373,7 @@ export function evolveCity(sim: Sim) {
 
   // Milestones
   const pop = population(sim);
-  for (const m of [5000, 7500, 10000, 15000, 20000, 30000]) {
+  for (const m of [5000, 7500, 10000, 15000, 20000, 30000, 45000, 65000, 90000, 120000, 160000]) {
     const key = `pop-${m}`;
     if (pop >= m && !sim.flags.has(key)) {
       sim.flags.add(key);

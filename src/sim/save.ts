@@ -1,5 +1,6 @@
 import { Sim } from "./engine";
 import { Rng } from "./rng";
+import { fxOf } from "./rules";
 
 const KEY = "cor-save-v1";
 
@@ -68,6 +69,10 @@ export function loadGame(): Sim | null {
     const { sim } = JSON.parse(raw, reviver) as { sim: Record<string, unknown> };
     const restored = Object.assign(Object.create(Sim.prototype), sim) as Sim;
     (restored as unknown as { listeners: Set<() => void> }).listeners = new Set();
+    // Fields added after the first save format.
+    restored.deck ??= [];
+    restored.recentOffers ??= [];
+    restored.fx ??= fxOf(restored.activeRule);
     return restored;
   } catch {
     return null;

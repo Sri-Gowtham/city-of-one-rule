@@ -19,10 +19,13 @@ import type {
   MetricKey,
   Params,
   Place,
+  LeisureKind,
+  RuleFx,
   RuleId,
+  RuleTheme,
   World,
 } from "./types";
-import { COMBOS, RULES, paramsFor, ruleById } from "./rules";
+import { COMBOS, RULES, fxOf, paramsFor, ruleById } from "./rules";
 import {
   DISTRICT_NAMES,
   addTree,
@@ -226,6 +229,7 @@ export class Sim {
   phase: Phase = "choosing";
   activeRule: RuleId | null = null;
   params: Params = paramsFor(null);
+  fx: RuleFx | null = null;
   history: { era: number; ruleId: RuleId }[] = [];
   culture: Record<CultureKey, number>;
   metrics: Record<MetricKey, number> = { ...NEUTRAL_METRICS };
@@ -243,6 +247,8 @@ export class Sim {
   unlocked: Set<RuleId>;
   newlyUnlocked: RuleId[] = [];
   offered: RuleId[] = [];
+  deck: RuleId[] = [];
+  recentOffers: RuleId[][] = [];
 
   counts: Record<string, number> = {};
   prevCounts: Record<string, number> | null = null;
@@ -365,6 +371,7 @@ export class Sim {
 
   private beginDay() {
     const P = (this.params = paramsFor(this.activeRule));
+    const F = (this.fx = fxOf(this.activeRule));
     const newNight = !this.dayPrepared;
     this.dayPrepared = false;
     this.hour = DAY_START;
@@ -392,7 +399,7 @@ export class Sim {
     for (const c of this.citizens) {
       const home = this.world.buildings[c.homeId];
       if (P.money) {
-        c.wealth += P.ubi + (newNight ? c.stipend - (P.sharedProperty ? 0 : rentFor(home.district)) - 3 : 0);
+        c.wealth += P.ubi + (newNight ? c.stipend - (P.sharedProperty ? 0 : rentFor(home.district) * (F?.rent ?? 1)) - 3 : 0);
         if (c.wealth < 0) {
           c.wealth = 0;
           c.mood -= 6;
@@ -454,11 +461,48 @@ export class Sim {
     }
   }
 
+  /**
+   * Deal rule choices from a shuffled deck so the whole catalog rotates:
+   * every unlocked rule is offered once before any repeats, nothing shown in
+   * the last two drafts (or used in the last three days) comes back, and each
+   * draft mixes different themes.
+   */
   offerRules() {
-    const pool = RULES.filter((r) => this.unlocked.has(r.id) && r.id !== this.activeRule).map((r) => r.id);
-    const fresh = this.newlyUnlocked.filter((id) => pool.includes(id));
-    const others = this.rng.shuffle(pool.filter((id) => !fresh.includes(id)));
-    this.offered = [...fresh, ...others].slice(0, Math.min(4, 3 + fresh.length));
+    const avail = RULES.filter((r) => this.unlocked.has(r.id) && r.id !== this.activeRule).map((r) => r.id);
+    const fresh = this.newlyUnlocked.filter((id) => avail.includes(id)).slice(0, 2);
+    const recent = new Set<RuleId>([...this.recentOffers.slice(-2).flat(), ...this.history.slice(-3).map((h) => h.ruleId)]);
+    const want = Math.min(4, 3 + fresh.length);
+    const picked: RuleId[] = [...fresh];
+    const themes = new Map<RuleTheme, number>();
+    const addTheme = (id: RuleId) => themes.set(ruleById(id).theme, (themes.get(ruleById(id).theme) ?? 0) + 1);
+    fresh.forEach(addTheme);
+    this.deck = this.deck.filter((id) => avail.includes(id) && !fresh.includes(id));
+
+    // Pass 0 is strict (no recents, one rule per theme); later passes relax.
+    for (let pass = 0; pass < 3 && picked.length < want; pass++) {
+      for (let refill = 0; refill < 2 && picked.length < want; refill++) {
+        if (!this.deck.length || refill === 1) {
+          const inDeck = new Set(this.deck);
+          this.deck.push(...this.rng.shuffle(avail.filter((id) => !inDeck.has(id) && !picked.includes(id))));
+        }
+        const skipped: RuleId[] = [];
+        while (this.deck.length && picked.length < want) {
+          const id = this.deck.shift()!;
+          const blocked = picked.includes(id) || (pass < 2 && recent.has(id)) || (themes.get(ruleById(id).theme) ?? 0) >= (pass === 0 ? 1 : 2);
+          if (blocked) skipped.push(id);
+          else {
+            picked.push(id);
+            addTheme(id);
+          }
+        }
+        // Skipped rules keep their place at the front so they come up soon.
+        this.deck.unshift(...skipped);
+      }
+    }
+    this.offered = picked;
+    this.deck = this.deck.filter((id) => !picked.includes(id));
+    this.recentOffers.push([...picked]);
+    if (this.recentOffers.length > 4) this.recentOffers.shift();
   }
 
   startEra(ruleId: RuleId | null) {
@@ -705,7 +749,7 @@ export class Sim {
     c.lastBiz = biz.id;
     biz.visitsToday++;
     if (P.money) {
-      const price = biz.price * (P.ubi > 0 ? 1.1 : 1);
+      const price = biz.price * (P.ubi > 0 ? 1.1 : 1) * (this.fx?.price ?? 1);
       if (c.wealth >= price) {
         c.wealth -= price;
         biz.revenueToday += price;
@@ -754,7 +798,9 @@ export class Sim {
   private desired(c: Citizen): Citizen["activity"] {
     const h = this.hour;
     const P = this.params;
-    if (h >= c.bedtime) return "home";
+    const F = this.fx;
+    if (h >= c.bedtime || (F?.curfew && h >= F.curfew)) return "home";
+    if (F?.siesta && h >= 13 && h < 15) return "home";
     if (c.workId !== null) {
       const end = c.workStart + P.workHours * (c.group === "student" ? 0.8 : 1);
       if (h >= c.workStart - 0.6 && h < end) {
@@ -865,6 +911,7 @@ export class Sim {
     if (biz.type === "Kiosk") w *= P.outsideHour ? 2 : 1.2;
     if (biz.type === "Repair") w *= P.wasteTax ? 2.2 : 0.6;
     if (biz.strategies.includes("Discounts for helpers") && c.prop.help > 0.35) w *= 1.6;
+    if (this.fx?.demand && biz.type !== "Grocery") w *= this.fx.demand;
     return w;
   }
 
@@ -883,8 +930,10 @@ export class Sim {
   private chooseLeisure(c: Citizen): Place {
     const P = this.params;
     const C = this.culture;
-    const cat = this.rng.weighted<string>([
-      [
+    const L = this.fx?.leisure;
+    const lw = (k: LeisureKind, w: number): [LeisureKind, number] => [k, Math.max(0.05, w + (L?.[k] ?? 0))];
+    const cat = this.rng.weighted<LeisureKind>([
+      lw(
         "park",
         1 +
           (P.outsideHour ? 1.4 : 0) +
@@ -892,12 +941,12 @@ export class Sim {
           (P.internet ? 0 : 0.6) +
           c.traits.envConcern * 0.6 +
           (this.flags.has("park-life") ? 0.6 : 0),
-      ],
-      ["shop", 2.3 * (P.money ? (c.wealth > 8 ? 1 : 0.3) : 0.8 + C.reputation / 150)],
-      ["community", c.traits.attachment * 1.4 + Math.max(0, (C.community - 40) / 30) + (P.internet ? 0 : 0.9)],
-      ["library", c.traits.curiosity * 1.1 + Math.max(0, (C.learning - 40) / 30)],
-      ["home", 0.8 + c.traits.privacy * 1.2 + (P.internet ? 0.7 : 0) - (P.outsideHour ? 0.4 : 0)],
-      ["plaza", 0.25 + C.participation / 120 + (P.voting ? 0.5 : 0) + (this.flags.has("town-hall") ? 0.5 : 0)],
+      ),
+      lw("shop", 2.3 * (P.money ? (c.wealth > 8 ? 1 : 0.3) : 0.8 + C.reputation / 150)),
+      lw("community", c.traits.attachment * 1.4 + Math.max(0, (C.community - 40) / 30) + (P.internet ? 0 : 0.9)),
+      lw("library", c.traits.curiosity * 1.1 + Math.max(0, (C.learning - 40) / 30)),
+      lw("home", 0.8 + c.traits.privacy * 1.2 + (P.internet ? 0.7 : 0) - (P.outsideHour ? 0.4 : 0)),
+      lw("plaza", 0.25 + C.participation / 120 + (P.voting ? 0.5 : 0) + (this.flags.has("town-hall") ? 0.5 : 0)),
     ]);
     switch (cat) {
       case "park":
@@ -932,9 +981,10 @@ export class Sim {
     const outdoors = c.inside === null;
     const moving = c.path.length > 0;
     const bld = c.inside !== null ? this.world.buildings[c.inside] : null;
+    const B = (k: Behavior) => this.fx?.beh?.[k] ?? 1;
 
     if (c.activity === "work" && bld && c.inside === c.workId) {
-      if (P.money) c.wealth += c.wage * TICK;
+      if (P.money) c.wealth += c.wage * TICK * (this.fx?.wage ?? 1);
       else c.reputation += 0.05;
       this.inc("workHours", TICK);
       const biz = this.businessAt(bld.id);
@@ -954,13 +1004,14 @@ export class Sim {
 
     if (outdoors && !moving && c.loc?.kind === "tile") c.day.outside += TICK;
 
-    if (outdoors && rng.chance(0.02 * c.prop.litter * (P.wasteTax ? 0.15 : 1))) {
+    if (outdoors && rng.chance(0.02 * c.prop.litter * (P.wasteTax ? 0.15 : 1) * B("litter"))) {
       this.world.litter.push({ x: c.x, y: c.y, jx: rng.range(-0.3, 0.3), jy: rng.range(-0.3, 0.3) });
       if (this.world.litter.length > 220) this.world.litter.shift();
       this.act(c, "litter");
     }
-    if (P.wasteTax && bld && rng.chance(0.02 * (0.3 + c.traits.envConcern))) this.act(c, "recycle");
-    if (P.internet && !moving && (c.activity === "home" || c.activity === "leisure") && rng.chance(0.07 * c.prop.scroll)) {
+    if ((P.wasteTax || B("recycle") > 1) && bld && rng.chance(0.02 * (0.3 + c.traits.envConcern) * (P.wasteTax ? 1 : B("recycle") - 0.6)))
+      this.act(c, "recycle");
+    if (P.internet && !moving && (c.activity === "home" || c.activity === "leisure") && rng.chance(0.07 * c.prop.scroll * B("scroll"))) {
       this.act(c, "scroll");
       c.stress += 0.008;
     }
@@ -974,13 +1025,14 @@ export class Sim {
         (P.money && c.wealth < 12 ? 2 : 1) *
         (0.6 + c.stress) *
         (P.noLying ? 0.55 : 1) *
+        B("crime") *
         night *
         (1.5 - C.community / 100) *
         (1 + (55 - this.metrics.equality) / 80);
       if (rng.chance(p)) this.commitCrime(c);
     }
 
-    if (bld?.kind === "community" && rng.chance(0.1 * c.prop.volunteer * (0.5 + C.community / 100))) {
+    if (bld?.kind === "community" && rng.chance(0.1 * c.prop.volunteer * (0.5 + C.community / 100) * B("volunteer"))) {
       this.act(c, "volunteer");
       c.mood += 2;
       if (rng.chance(0.3)) this.note(c, "Volunteered at the community center.");
@@ -992,7 +1044,7 @@ export class Sim {
     }
 
     if (outdoors && !moving && this.world.litter.length) {
-      const pCleanup = 0.04 * c.traits.envConcern * (0.5 + C.environment / 100) * (P.wasteTax ? 2 : 1);
+      const pCleanup = 0.04 * c.traits.envConcern * (0.5 + C.environment / 100) * (P.wasteTax ? 2 : 1) * B("cleanup");
       if (rng.chance(pCleanup)) {
         const before = this.world.litter.length;
         this.world.litter = this.world.litter.filter((l) => (l.x - c.x) ** 2 + (l.y - c.y) ** 2 > 6);
@@ -1147,7 +1199,8 @@ export class Sim {
     const bld = a.inside !== null ? this.world.buildings[a.inside] : null;
     const atHome = !!bld && (bld.kind === "house" || bld.kind === "apartment");
     const atShop = !!this.businessAt(a.inside)?.consumer;
-    return this.rng.weighted<Behavior>([
+    const fxb = this.fx?.beh;
+    const opts: [Behavior, number][] = [
       [
         "help",
         a.prop.help *
@@ -1178,7 +1231,8 @@ export class Sim {
         a.prop.teach * (P.skillQuota ? 3.5 : 1) * (a.skills > b.skills ? 1.4 : 0.5) * cf("learning") * (b.day.learned ? 0.4 : 1),
       ],
       ["avoid", P.noLying || P.mustAnswer ? a.prop.avoid * (0.6 + a.traits.privacy) * (P.mustAnswer ? 2.2 : 1.4) : 0],
-    ]);
+    ];
+    return this.rng.weighted<Behavior>(fxb ? opts.map(([k, w]): [Behavior, number] => [k, w * (fxb[k] ?? 1)]) : opts);
   }
 
   private interact(a: Citizen, b: Citizen, kind: Behavior) {
@@ -1629,8 +1683,19 @@ export class Sim {
         }
         break;
       }
-      default:
+      default: {
+        const E = this.fx?.emergent;
+        if (!E) break;
+        const ready = E.count ? k(E.count) >= (E.min ?? 1) : h >= (E.hour ?? 12);
+        if (ready && this.trigger(E.flag, E.headline, E.body, E.feed, E.label)) {
+          if (E.worldFlag) this.world.flags.add(E.worldFlag);
+          if (E.business) {
+            const b = placeOnLot(this.world, this.rng, E.business.kind, E.business.name, E.business.districts, this.era);
+            this.newBusiness(b, E.business.name);
+          }
+        }
         break;
+      }
     }
   }
 
@@ -1666,7 +1731,7 @@ export class Sim {
       const wealthTerm = P.money ? clamp((c.wealth - 35) / 5, -14, 6) : clamp((c.favors + (c.reputation - 50) / 8) / 2, -8, 5);
       const unemp = this.daySamples.length ? this.daySamples[this.daySamples.length - 1].unemployment : 0.06;
       const cityTerm = (0.06 - unemp) * 60 + (this.metrics.safety - 60) * 0.12 + (this.metrics.environment - 60) * 0.08 + (c.traits.trust - 0.55) * 20;
-      const target = 45 + (0.3 - c.stress) * 45 + wealthTerm + cityTerm;
+      const target = 45 + (0.3 - c.stress) * 45 + wealthTerm + cityTerm + (this.fx?.mood ?? 0);
       c.mood = clamp(c.mood + (target - c.mood) * 0.03);
       const tTarget = 0.3 + this.culture.honesty / 400 + this.culture.community / 400 + (this.metrics.safety - 50) / 500;
       c.traits.trust = clamp01(c.traits.trust + (tTarget - c.traits.trust) * 0.004);
@@ -1689,7 +1754,7 @@ export class Sim {
       trust: avg((c) => c.traits.trust) * 100,
       economy: clamp(
         (1 - dayWeight) * this.lastEcon +
-          dayWeight * (60 * Math.pow((this.econToday + 25) / (nearest(this.base.econ) + 25), 0.85) - closed),
+          dayWeight * (60 * Math.pow((this.econToday * (this.fx?.econ ?? 1) + 25) / (nearest(this.base.econ) + 25), 0.85) - closed),
       ),
       equality: clamp(100 - gini(wealth) * 115),
       safety: clamp(
@@ -1712,8 +1777,9 @@ export class Sim {
           (this.world.flags.has("airport-2-open") ? 3 : 0),
       ),
     };
+    const fxm = this.fx?.metric;
     for (const k of Object.keys(target) as MetricKey[]) {
-      const v = clamp(target[k]);
+      const v = clamp(target[k] + (fxm?.[k] ?? 0) * dayWeight);
       this.metrics[k] = instant ? v : this.metrics[k] + (v - this.metrics[k]) * 0.2;
     }
     const m = this.metrics;
@@ -1764,7 +1830,9 @@ export class Sim {
     this.newlyUnlocked = [];
     for (const r of RULES) {
       if (this.unlocked.has(r.id) || !r.unlock) continue;
-      if (this.culture[r.unlock.key] >= r.unlock.min) {
+      const u = r.unlock;
+      const ok = u.flag ? this.world.flags.has(u.flag) : u.key !== undefined && this.culture[u.key] >= (u.min ?? 0);
+      if (ok) {
         this.unlocked.add(r.id);
         this.newlyUnlocked.push(r.id);
       }
@@ -1892,6 +1960,15 @@ export function grievance(c: Citizen, rule: RuleId): number {
     case "reward-citizen":
       g = (1 - t.influence) * 0.3;
       break;
+    default: {
+      const G = ruleById(rule).fx?.griev;
+      g = G?.base ?? 0;
+      for (const [k, w] of Object.entries(G?.traits ?? {}) as [keyof Citizen["traits"], number][])
+        g += w >= 0 ? t[k] * w : (1 - t[k]) * -w;
+      g += G?.groups?.[c.group] ?? 0;
+      if (c.wealth > 55) g += G?.rich ?? 0;
+      if (c.wealth < 20) g += G?.poor ?? 0;
+    }
   }
   return clamp01(g);
 }

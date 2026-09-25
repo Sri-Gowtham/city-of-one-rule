@@ -160,7 +160,90 @@ export type RuleId =
   | "hour-outside"
   | "waste-tax"
   | "daily-vote"
-  | "reward-citizen";
+  | "reward-citizen"
+  | "siesta"
+  | "job-lottery"
+  | "double-wage"
+  | "public-salaries"
+  | "pay-what-you-want"
+  | "rent-cap"
+  | "screen-tax"
+  | "tourist-tax"
+  | "shared-meal"
+  | "mentor-student"
+  | "anonymous-city"
+  | "open-doors"
+  | "green-roofs"
+  | "no-cars"
+  | "car-free-downtown"
+  | "zero-plastic"
+  | "free-transit"
+  | "bike-friday"
+  | "children-decide"
+  | "curfew"
+  | "open-borders"
+  | "public-art"
+  | "quiet-nights"
+  | "day-of-rest"
+  | "free-university";
+
+export type RuleTheme = "work" | "money" | "social" | "environment" | "mobility" | "civic" | "culture" | "wellbeing";
+
+export type LeisureKind = "park" | "shop" | "community" | "library" | "home" | "plaza";
+
+/** Data-driven effects for rules that don't need bespoke engine code. */
+export interface RuleFx {
+  /** Multipliers on behavior weights/probabilities. */
+  beh?: Partial<Record<Behavior, number>>;
+  /** Additive weights on leisure destination choice. */
+  leisure?: Partial<Record<LeisureKind, number>>;
+  /** Everyone heads home from this hour. */
+  curfew?: number;
+  /** Work pauses and people go home 13:00–15:00. */
+  siesta?: boolean;
+  wage?: number;
+  price?: number;
+  /** Multiplier on shop demand (non-grocery). */
+  demand?: number;
+  /** Multiplier on daily economic activity. */
+  econ?: number;
+  /** Offsets added to metric targets. */
+  metric?: Partial<Record<MetricKey, number>>;
+  /** Mood target offset. */
+  mood?: number;
+  /** Traffic density multiplier (0 = no cars). */
+  cars?: number;
+  carFreeDowntown?: boolean;
+  bikes?: number;
+  migration?: number;
+  skill?: number;
+  rent?: number;
+  landValue?: number;
+  visual?: "murals" | "greenroofs";
+  griev: {
+    base?: number;
+    traits?: Partial<Record<keyof Traits, number>>;
+    groups?: Partial<Record<OccGroup, number>>;
+    rich?: number;
+    poor?: number;
+  };
+  emergent: {
+    flag: string;
+    /** Counter key and threshold; or an hour of day when omitted. */
+    count?: string;
+    min?: number;
+    hour?: number;
+    headline: string;
+    body: string;
+    feed: string;
+    label: string;
+    /** Optional business to open when it triggers. */
+    business?: { kind: BuildingKind; name: string; districts: DistrictId[] };
+    /** Persistent world flag it leaves behind. */
+    worldFlag?: string;
+  };
+  topics?: string[];
+}
 
 export interface Params {
   money: boolean;
@@ -188,7 +271,9 @@ export interface RuleDef {
   pressures: string[];
   params: Partial<Params>;
   push: Partial<Record<CultureKey, number>>;
-  unlock?: { key: CultureKey; min: number; hint: string };
+  theme: RuleTheme;
+  unlock?: { key?: CultureKey; min?: number; flag?: string; hint: string };
+  fx?: RuleFx;
 }
 
 export interface Traits {

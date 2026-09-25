@@ -29,7 +29,7 @@ export const PROJECT_NAMES: Record<ProjectId, string> = {
   mall: "Galleria One shopping mall",
   bridge: "Harbor Bridge",
   "bridge-widening": "Harbor Bridge widening",
-  railway: "Northern Railway",
+  railway: "Metro Loop",
   metro: "City Metro Line 1",
   port: "Port expansion",
   shipyard: "Harbor Shipyard",
@@ -124,7 +124,7 @@ export function updateProjects(sim: Sim) {
   const output = production.reduce((a, b) => a + b.demand, 0) / Math.max(1, production.length);
   if (!has("railway") && (s.population > 4700 * k || output > 110 * k) && sim.metrics.economy > 50 * k) {
     start(sim, "railway", buildDays(sim, 4), null);
-    story(sim, "RAILWAY APPROVED", `${s.population > 4700 ? "A growing commuter population" : "Busy factories needing freight"} tips the balance: work begins on a railway along the city's northern edge.`);
+    story(sim, "METRO LOOP APPROVED", `${s.population > 4700 ? "A growing commuter population" : "Busy factories needing better transit"} tips the balance: work begins on an elevated Metro Loop circling the city.`);
   }
   if (!has("metro") && s.population > 5000 * k && (down?.landValue ?? 0) > 64 * k && sim.metrics.economy > 54 * k) {
     start(sim, "metro", buildDays(sim, 5), null);
@@ -209,13 +209,20 @@ export function updateProjects(sim: Sim) {
         condition: 0.9,
       };
       sim.districts.push(coast);
-      story(sim, "HARBOR BRIDGE OPENS", "Harbor Bridge is open. Hotels, cafés and beach homes are rising on the new Harborview waterfront.", true);
+      story(
+        sim,
+        "HARBOR BRIDGE OPENS",
+        `Harbor Bridge is open. Hotels, cafés and beach homes are rising on the new Harborview waterfront.${
+          sim.world.flags.has("rail") ? " The Metro Loop has already grown a branch across the water to serve it." : ""
+        }`,
+        true,
+      );
     }
     if (p.id === "bridge-widening") story(sim, "WIDER BRIDGE OPENS", "Harbor Bridge reopens with extra lanes; commutes to Harborview get easier.", true);
     if (p.id === "railway") {
       const st = layRail(sim.world, []);
       sim.railStations = [...new Set(st.map((s) => s.d))];
-      story(sim, "FIRST TRAINS RUN", `The Northern Railway opens with ${st.length} stations. Commuters from ${sim.railStations.map((d) => DISTRICT_NAMES[d as keyof typeof DISTRICT_NAMES]).join(", ")} can leave the car at home.`, true);
+      story(sim, "THE METRO LOOP OPENS", `A ring of elevated track now circles the whole city, with ${st.length} stations serving ${sim.railStations.map((d) => DISTRICT_NAMES[d as keyof typeof DISTRICT_NAMES]).join(", ")}. Trains run continuously, day and night.`, true);
     }
     if (p.id === "metro") {
       sim.metroStops = placeMetro(sim.world, sim.rng, ["downtown", "residential", "university", "oldtown"]);

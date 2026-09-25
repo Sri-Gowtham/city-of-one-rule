@@ -1,7 +1,7 @@
 import type { Sim } from "../sim/engine";
 import { buildReport } from "../sim/report";
 import { cityIdentity } from "../sim/identity";
-import { RULES, ruleById } from "../sim/rules";
+import { RULES, THEME_LABEL, ruleById } from "../sim/rules";
 import { METRIC_KEYS } from "../sim/types";
 import type { FrontPage, RuleId } from "../sim/types";
 import { useState } from "react";
@@ -41,6 +41,7 @@ export function RuleDraft({ sim, onChoose, onPeek, onEnd }: { sim: Sim; onChoose
                 <div className="card-title">{r.title}</div>
                 <div className="card-flavor">{r.flavor}</div>
                 <div className="card-tags">
+                  <span className={`theme theme-${r.theme}`}>{THEME_LABEL[r.theme]}</span>
                   {r.pressures.map((p) => (
                     <span key={p}>{p}</span>
                   ))}

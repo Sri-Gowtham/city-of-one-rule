@@ -758,26 +758,69 @@ export function buildIsland(world: World, rng: Rng, era: number): Building[] {
   return built;
 }
 
+/** Kept for compatibility with old saves/ground rendering; no longer used to lay track. */
 export const RAIL_Y = 0;
 
+/**
+ * The Metro Loop is an elevated line that circles the whole city along the
+ * outer ring road, closed back on itself. It doesn't touch ground tiles —
+ * it's drawn above them — so it needs no pathfinding or tile mutation.
+ */
+export function metroLoopPoints(): { x: number; y: number }[] {
+  const a = ROADS[0];
+  const b = ROADS[BLOCKS];
+  return [
+    { x: a, y: a },
+    { x: b, y: a },
+    { x: b, y: b },
+    { x: a, y: b },
+    { x: a, y: a },
+  ];
+}
+
+/**
+ * Once the Harbor Bridge exists the loop grows a branch out to Harborview,
+ * leaving the ring at the point nearest the bridge; once the airport exists
+ * that branch extends further to the terminal. Both are computed fresh from
+ * world flags, so nothing needs to be stored or migrated on old saves.
+ */
+export function metroBranchPoints(world: World): { x: number; y: number }[] {
+  if (!world.flags.has("bridge")) return [];
+  const harbor = { x: ISLAND_X0 + 3, y: Math.round((ISLAND_Y0 + ISLAND_Y1) / 2) };
+  const out = [{ x: ROADS[BLOCKS], y: BRIDGE_Y }, { x: ISLAND_X0, y: BRIDGE_Y }, harbor];
+  if (world.flags.has("airport")) out.push({ x: ISLAND_X0 + 2, y: 6 }, { x: ISLAND_X0 + 2, y: 4 });
+  return out;
+}
+
+const RING_STATION_OFFSETS = [ROADS[1], ROADS[5]];
+
+/** Station stops around the ring, sampled one tile in from the edge for their district. */
+export function metroStationSpots(world: World): { x: number; y: number; d: DistrictId }[] {
+  const a = ROADS[0];
+  const b = ROADS[BLOCKS];
+  const out: { x: number; y: number; d: DistrictId }[] = [];
+  for (const x of RING_STATION_OFFSETS) {
+    out.push({ x, y: a, d: world.district[idx(x, a + 1)] });
+    out.push({ x, y: b, d: world.district[idx(x, b - 1)] });
+  }
+  for (const y of RING_STATION_OFFSETS) {
+    out.push({ x: a, y, d: world.district[idx(a + 1, y)] });
+    out.push({ x: b, y, d: world.district[idx(b - 1, y)] });
+  }
+  if (world.flags.has("bridge")) out.push({ x: ISLAND_X0 + 3, y: Math.round((ISLAND_Y0 + ISLAND_Y1) / 2), d: "coast" });
+  return out;
+}
+
 export function layRail(world: World, stations: DistrictId[]): { x: number; d: DistrictId }[] {
-  for (let x = 0; x <= MAIN - 3; x++) {
-    const i = idx(x, RAIL_Y);
-    if (world.treeAt.has(i)) world.treeAt.delete(i);
-    world.tiles[i] = "rail";
-  }
-  world.trees = world.trees.filter((t) => world.treeAt.has(idx(t.x, t.y)));
+  const spots = metroStationSpots(world).filter((s) => s.d !== "coast");
   const out: { x: number; d: DistrictId }[] = [];
-  for (let bx = 0; bx < BLOCKS; bx += 2) {
-    const x = 2 + bx * 6 + 2;
-    const d = world.district[idx(x, 2)];
-    if (!stations.length || stations.includes(d) || bx === 0) {
-      world.props.push({ kind: "platform", x, y: RAIL_Y, variant: out.length });
-      out.push({ x, d });
-    }
+  for (const s of spots) {
+    if (stations.length && !stations.includes(s.d)) continue;
+    world.props.push({ kind: "platform", x: s.x, y: s.y, variant: out.length });
+    out.push({ x: s.x, d: s.d });
   }
-  world.groundVersion++;
   world.flags.add("rail");
+  world.groundVersion++;
   return out;
 }
 

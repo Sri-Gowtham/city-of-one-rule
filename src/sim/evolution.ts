@@ -237,16 +237,17 @@ export function evolveCity(sim: Sim) {
   }
   const cityUnemp = clamp01(1 - cityJobs / Math.max(1, cityWorkers));
 
+  const F = sim.fx;
   // Education, skills (lagged), unemployment, income, attractiveness
   for (const d of sim.districts) {
     const schools = sim.world.buildings.filter((b) => b.district === d.id && (b.kind === "school" || b.kind === "university" || b.kind === "library")).length;
-    const target = clamp(0.22 + C.learning / 260 + schools * 0.025 + learnSignal * 0.06 + (P.skillQuota ? 0.06 : 0) + (P.internet ? 0.02 : -0.02), 0.1, 0.9);
+    const target = clamp(0.22 + C.learning / 260 + schools * 0.025 + learnSignal * 0.06 + (P.skillQuota ? 0.06 : 0) + (P.internet ? 0.02 : -0.02) + (F?.skill ?? 0), 0.1, 0.9);
     d.education += (target - d.education) * 0.12;
     d.skill += (d.education - d.skill) * 0.07;
     d.unemployment = clamp01(cityUnemp * (1.35 - d.skill * 0.7) + (d.id === "industrial" && P.workHours < 8 ? 0.02 : 0));
     const wageBase = P.money ? 30 : 20;
-    d.income = wageBase * (0.55 + d.skill) * (1 - d.unemployment) + P.ubi * 1.6 + (d.id === "downtown" ? 4 : 0);
-    const rent = d.landValue / 3;
+    d.income = wageBase * (F?.wage ?? 1) * (0.55 + d.skill) * (1 - d.unemployment) + P.ubi * 1.6 + (d.id === "downtown" ? 4 : 0);
+    const rent = (d.landValue / 3) * (F?.rent ?? 1);
     d.attract =
       0.45 * clamp01(1 - d.unemployment * 2.5) +
       0.2 * clamp01(d.income / 45) +
@@ -281,7 +282,8 @@ export function evolveCity(sim: Sim) {
 
     const n = total(p);
     const vacancy = d.housing - n;
-    const inflow = n * (0.025 * (d.attract - avgAttract) + 0.02 * (d.attract - 0.62)) + Math.max(0, vacancy) * 0.05 * clamp01((d.attract - 0.45) * 4);
+    let inflow = n * (0.025 * (d.attract - avgAttract) + 0.02 * (d.attract - 0.62)) + Math.max(0, vacancy) * 0.05 * clamp01((d.attract - 0.45) * 4);
+    if (F?.migration) inflow = inflow > 0 ? inflow * F.migration : inflow / F.migration;
     const move = inflow > 0 ? Math.min(inflow, Math.max(0, vacancy) + n * 0.003) : Math.max(inflow, -n * 0.03);
     d.netMigration = move;
     const share = move > 0 ? { young: 0.55, adults: 0.3, children: 0.1, students: 0.05 } : { young: 0.5, adults: 0.35, children: 0.1, students: 0.05 };
@@ -305,7 +307,7 @@ export function evolveCity(sim: Sim) {
       5,
       98,
     );
-    d.landValue += (target - d.landValue) * 0.18;
+    d.landValue += (target * (F?.landValue ?? 1) - d.landValue) * 0.18;
   }
 
   // Buildings: condition, level up / down, abandonment

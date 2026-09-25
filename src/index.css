@@ -896,6 +896,19 @@ button:disabled {
   padding: 2px 8px;
   color: #cfd8ea;
 }
+.card-tags span.theme {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #0d1320;
+}
+.theme-work { background: #f0b25a !important; }
+.theme-money { background: #e8d36a !important; }
+.theme-social { background: #f28fa6 !important; }
+.theme-environment { background: #7fd08a !important; }
+.theme-mobility { background: #6fc3e8 !important; }
+.theme-civic { background: #a9a2f2 !important; }
+.theme-culture { background: #e7a1e0 !important; }
+.theme-wellbeing { background: #9fe2cf !important; }
 .draft-foot {
   display: flex;
   align-items: center;

@@ -139,6 +139,8 @@ const RULE_TOPICS: Record<string, string[]> = {
   "reward-citizen": ["reward", "help"],
 };
 
+const topicsOf = (id: string | null): string[] => (id ? RULE_TOPICS[id] ?? ruleById(id as Parameters<typeof ruleById>[0]).fx?.topics ?? [] : []);
+
 const COMBO_IDS = new Set(["reputation-marketing", "reputation-currency", "park-life", "radical-sincerity", "town-hall", "academies", "commons", "repair-culture"]);
 
 type Change = { k: string; pct: number; a: number; b: number; score: number; good: boolean };
@@ -152,9 +154,9 @@ function describe(c: Change): string {
 export function buildFrontPage(sim: Sim): FrontPage {
   const prev = sim.prevCounts ?? sim.baseCounts;
   const cur = sim.counts;
-  const related = new Set(sim.activeRule ? RULE_TOPICS[sim.activeRule] ?? [] : []);
+  const related = new Set(topicsOf(sim.activeRule));
   const prevRule = sim.history.length >= 2 ? sim.history[sim.history.length - 2].ruleId : null;
-  const stale = new Set(prevRule && prevRule !== sim.activeRule ? (RULE_TOPICS[prevRule] ?? []).filter((k) => !related.has(k)) : []);
+  const stale = new Set(prevRule && prevRule !== sim.activeRule ? topicsOf(prevRule).filter((k) => !related.has(k)) : []);
   const changes = Object.keys(LINES)
     .map((k): Change | null => {
       const a = Math.round(prev[k] ?? 0);

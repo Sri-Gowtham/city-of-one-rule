@@ -208,6 +208,82 @@ export function playRule(id: string) {
     case "reward-citizen":
       [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.4, "sine", 0.05, i * 0.07));
       break;
+    case "siesta":
+    case "quiet-nights":
+      chord([262, 330, 392], 1.6, "sine", 0.045, 0.25);
+      tone(196, 1.8, "sine", 0.04, 0.6, 0.8);
+      break;
+    case "job-lottery":
+      for (let i = 0; i < 9; i++) tone(600 + Math.random() * 900, 0.06, "square", 0.03, i * 0.06);
+      chord([523, 659, 784], 0.5, "triangle", 0.05, 0.6);
+      break;
+    case "double-wage":
+    case "pay-what-you-want":
+    case "tourist-tax":
+      noise(0.08, 0.2, 3000, 2, 0);
+      [1319, 1568, 2093].forEach((f, i) => tone(f, 0.3, "triangle", 0.05, 0.1 + i * 0.08));
+      break;
+    case "public-salaries":
+    case "anonymous-city":
+      for (let i = 0; i < 12; i++) noise(0.05, 0.1, 1500 + Math.random() * 2500, 4, i * 0.05);
+      tone(220, 0.4, "sine", 0.05, 0.6);
+      break;
+    case "rent-cap":
+    case "open-doors":
+      noise(0.12, 0.2, 700, 3, 0);
+      tone(330, 0.5, "triangle", 0.05, 0.15);
+      tone(440, 0.6, "triangle", 0.05, 0.35);
+      break;
+    case "screen-tax":
+      tone(1200, 0.5, "sawtooth", 0.04, 0, 0.3);
+      noise(0.3, 0.12, 400, 0.8, 0.3, "lowpass");
+      break;
+    case "shared-meal":
+      for (let i = 0; i < 5; i++) tone(2600 + Math.random() * 600, 0.15, "sine", 0.03, i * 0.12);
+      chord([392, 494, 587, 784], 0.9, "sine", 0.045, 0.08);
+      break;
+    case "mentor-student":
+    case "free-university":
+      [523, 659, 784, 1047, 784].forEach((f, i) => tone(f, 0.22, "triangle", 0.05, i * 0.11));
+      break;
+    case "green-roofs":
+    case "zero-plastic":
+      noise(0.4, 0.14, 500, 0.5, 0, "lowpass");
+      chirp(0.2);
+      tone(880, 0.5, "sine", 0.04, 0.4, 1.3);
+      break;
+    case "no-cars":
+    case "car-free-downtown":
+      tone(160, 0.6, "sawtooth", 0.04, 0, 0.4);
+      chirp(0.6);
+      chirp(0.9);
+      break;
+    case "free-transit":
+      [659, 523, 392].forEach((f, i) => tone(f, 0.35, "sine", 0.06, i * 0.28));
+      noise(0.8, 0.06, 300, 0.6, 0.2, "lowpass");
+      break;
+    case "bike-friday":
+      tone(2400, 0.08, "sine", 0.06, 0);
+      tone(2400, 0.08, "sine", 0.06, 0.14);
+      noise(0.5, 0.05, 1200, 1, 0.2);
+      break;
+    case "children-decide":
+      [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.18, "square", 0.03, i * 0.09, 1.1));
+      break;
+    case "curfew":
+      [0, 0.7, 1.4].forEach((d) => tone(330, 0.6, "sine", 0.06, d, 0.99));
+      break;
+    case "open-borders":
+      chord([294, 370, 440, 587], 1.2, "triangle", 0.045, 0.14);
+      break;
+    case "public-art":
+      for (let i = 0; i < 4; i++) noise(0.18, 0.12, 5000, 0.8, i * 0.2, "highpass");
+      chord([440, 554, 659], 0.8, "sine", 0.04, 0.1);
+      break;
+    case "day-of-rest":
+      chord([262, 392, 523], 1.2, "sine", 0.04, 0);
+      tone(523, 1.4, "sine", 0.04, 0.8);
+      break;
     default:
       play("rule");
   }
@@ -244,7 +320,28 @@ function ambientTick(rule: string) {
       break;
     case "help-stranger":
     case "reward-citizen":
+    case "shared-meal":
+    case "open-doors":
       tone(1319, 0.3, "sine", 0.02, 0, 1.2);
+      break;
+    case "green-roofs":
+    case "no-cars":
+    case "car-free-downtown":
+    case "bike-friday":
+    case "day-of-rest":
+    case "children-decide":
+      chirp();
+      break;
+    case "free-transit":
+      noise(1.4, 0.04, 260, 0.6, 0, "lowpass");
+      break;
+    case "public-salaries":
+    case "anonymous-city":
+      noise(1, 0.04, 600 + Math.random() * 400, 0.8);
+      break;
+    case "mentor-student":
+    case "free-university":
+      tone([523, 587, 659, 784][Math.floor(Math.random() * 4)], 0.3, "triangle", 0.025);
       break;
     default:
       break;

@@ -1,6 +1,20 @@
 import type { Sim } from "../sim/engine";
 import type { Building, Citizen, Prop, Tree } from "../sim/types";
-import { BLOCKS, BRIDGE_Y, DISTRICT_NAMES, ISLAND_X0, ISLAND_X1, ISLAND_Y0, ISLAND_Y1, LAST_ROAD, MAIN, RAIL_Y, ROADS, S, idx } from "../sim/world";
+import {
+  BLOCKS,
+  BRIDGE_Y,
+  DISTRICT_NAMES,
+  ISLAND_X0,
+  ISLAND_X1,
+  ISLAND_Y0,
+  ISLAND_Y1,
+  LAST_ROAD,
+  ROADS,
+  S,
+  idx,
+  metroBranchPoints,
+  metroLoopPoints,
+} from "../sim/world";
 import type { DistrictId } from "../sim/types";
 import { box, buildSprite, buildingHeight, buildingHull, spriteKey } from "./buildings";
 import type { Sprite } from "./buildings";
@@ -105,6 +119,8 @@ export class CityRenderer {
   private time = 0;
   private sprites = new Map<number, Sprite>();
   private labels: { x: number; y: number; text: string }[] | null = null;
+  private metroKey = "";
+  private metroPath: { pts: Pt[]; cum: number[]; total: number } | null = null;
 
   resize(w: number, h: number, dpr: number) {
     this.w = w;
@@ -241,17 +257,6 @@ export class CityRenderer {
       if (c.inside !== null || !visible(c.x, c.y)) continue;
       list.push({ d: c.x + c.y + 0.02, f: () => this.drawCitizen(ctx, c, sim, selected) });
     }
-    if (world.flags.has("rail")) {
-      const span = MAIN - 4;
-      const t = (this.time * 0.08 * Math.max(0.6, Math.min(3, speed || 0.6))) % 2;
-      const head = t < 1 ? t * span : (2 - t) * span;
-      const dir = t < 1 ? 1 : -1;
-      for (let k = 0; k < 4; k++) {
-        const cx = head - dir * k * 0.95;
-        if (cx < 0 || cx > span + 1) continue;
-        list.push({ d: cx + RAIL_Y + 0.5, f: () => this.drawRailCar(ctx, cx, k === 0) });
-      }
-    }
     if (world.flags.has("airport")) list.push({ d: 9999, f: () => this.drawPlane(ctx, speed) });
     this.updateCars(sim, realDt, speed);
     for (const car of this.cars) {
@@ -260,6 +265,7 @@ export class CityRenderer {
     }
     list.sort((a, b) => a.d - b.d);
     for (const it of list) it.f();
+    if (world.flags.has("rail")) this.drawMetroLoop(ctx, sim, speed, night);
 
     if (this.lens !== "none") this.drawLens(ctx, sim);
     this.updateParticles(ctx, bc, realDt, speed);
@@ -362,11 +368,110 @@ export class CityRenderer {
     if (hl) poly(ctx, buildingHull(b), undefined, hl === 2 ? "#ffd84a" : "rgba(255,255,255,0.85)", hl === 2 ? 3 : 1.5);
   }
 
-  private drawRailCar(ctx: CanvasRenderingContext2D, x: number, lead: boolean) {
-    box(ctx, x - 0.42, RAIL_Y + 0.28, 0.84, 0.44, 0, 9, lead ? "#d8433b" : "#c9ced4", lead ? "#f2c14e" : "#e6e9ec");
-    const a = iso(x - 0.3, RAIL_Y + 0.72, 5);
-    const b = iso(x + 0.3, RAIL_Y + 0.72, 5);
-    line(ctx, a, b, "#2b3440", 3);
+  /** Builds (and caches) the elevated Metro Loop's full path: the ring road, with a
+   *  spur to Harborview — and on to the airport — spliced in where it meets the bridge. */
+  private buildMetroPath(sim: Sim): { pts: Pt[]; cum: number[]; total: number } {
+    const key = `${+sim.world.flags.has("bridge")}${+sim.world.flags.has("airport")}`;
+    if (this.metroPath && this.metroKey === key) return this.metroPath;
+    this.metroKey = key;
+    const ring = metroLoopPoints();
+    const branch = metroBranchPoints(sim.world);
+    const wp: { x: number; y: number }[] = [ring[0], ring[1], { x: ring[1].x, y: BRIDGE_Y }];
+    if (branch.length) {
+      for (let i = 1; i < branch.length; i++) wp.push(branch[i]);
+      for (let i = branch.length - 2; i >= 0; i--) wp.push(branch[i]);
+    }
+    wp.push({ x: ring[1].x, y: ring[2].y }, ring[2], ring[3], ring[4]);
+    const pts = wp.map((p) => iso(p.x, p.y, 0) as Pt);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    this.metroPath = { pts, cum, total: cum[cum.length - 1] };
+    return this.metroPath;
+  }
+
+  private metroPointAt(path: { pts: Pt[]; cum: number[]; total: number }, d: number): Pt {
+    const target = ((d % path.total) + path.total) % path.total;
+    let i = 1;
+    while (i < path.cum.length && path.cum[i] < target) i++;
+    i = Math.min(i, path.cum.length - 1);
+    const segLen = path.cum[i] - path.cum[i - 1] || 1;
+    const t = (target - path.cum[i - 1]) / segLen;
+    const [x0, y0] = path.pts[i - 1];
+    const [x1, y1] = path.pts[i];
+    return [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
+  }
+
+  private drawMetroLoop(ctx: CanvasRenderingContext2D, sim: Sim, speed: number, night: number) {
+    const Z = 40;
+    const path = this.buildMetroPath(sim);
+    const up = (p: Pt): Pt => [p[0], p[1] - Z];
+
+    // Guideway: pillars every ~2.5 tiles, with an elevated beam on top.
+    ctx.strokeStyle = "rgba(150,162,182,0.9)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(...up(path.pts[0]));
+    for (let i = 1; i < path.pts.length; i++) ctx.lineTo(...up(path.pts[i]));
+    ctx.stroke();
+    let acc = 0;
+    for (let i = 1; i < path.pts.length; i++) {
+      const [x0, y0] = path.pts[i - 1];
+      const [x1, y1] = path.pts[i];
+      const segLen = Math.hypot(x1 - x0, y1 - y0);
+      for (let d = acc === 0 ? 0 : 55 - (acc % 55); d < segLen; d += 55) {
+        const t = d / segLen;
+        const gx = x0 + (x1 - x0) * t;
+        const gy = y0 + (y1 - y0) * t;
+        line(ctx, [gx, gy], [gx, gy - Z], "rgba(90,98,112,0.75)", 2.5);
+      }
+      acc += segLen;
+    }
+
+    // Stations at the harbor / airport spur tip (ring stations are placed as ordinary props).
+    if (sim.world.flags.has("bridge")) {
+      const tip = up(this.metroPointAt(path, path.total * 0.5));
+      ctx.font = "700 9px 'Inter', sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.beginPath();
+      ctx.roundRect(tip[0] - 12, tip[1] - 12, 24, 16, 4);
+      ctx.fillStyle = "#3d6fb6";
+      ctx.fill();
+      ctx.strokeStyle = "#27497a";
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText("🚉", tip[0], tip[1] - 4);
+      ctx.textBaseline = "alphabetic";
+    }
+
+    // Trains: three cars circling continuously, each with a short trailing consist.
+    const f = Math.max(0.6, Math.min(3, speed || 0.6));
+    const v = this.time * 9 * f;
+    const trainGap = path.total / 3;
+    for (let tr = 0; tr < 3; tr++) {
+      const head = v + tr * trainGap;
+      for (let k = 0; k < 3; k++) this.drawMetroCar(ctx, up(this.metroPointAt(path, head - k * 13)), k === 0, night);
+    }
+  }
+
+  private drawMetroCar(ctx: CanvasRenderingContext2D, p: Pt, lead: boolean, night: number) {
+    const [x, y] = p;
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + 40, 10, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = lead ? "#d8433b" : "#c9ced4";
+    ctx.beginPath();
+    ctx.roundRect(x - 9, y - 4, 18, 8, 3);
+    ctx.fill();
+    ctx.strokeStyle = "#2b3440";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    if (night > 0.15) {
+      ctx.fillStyle = "rgba(255,224,150,0.9)";
+      ctx.fillRect(x - 6, y - 1.5, 12, 2.5);
+    }
   }
 
   private drawPlane(ctx: CanvasRenderingContext2D, speed: number) {

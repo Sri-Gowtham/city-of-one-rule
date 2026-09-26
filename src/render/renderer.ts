@@ -38,10 +38,9 @@ function litProb(hour: number, home: boolean): number {
 import type { Pt } from "./draw";
 import { renderGround } from "./ground";
 import { drawSky } from "./atmosphere";
-import { dayWeather, drawClouds, drawFog, drawPuddles, drawRain, drawWaterShimmer, drawWeatherIcon } from "./weather";
+import { dayWeather, drawClouds, drawFog, drawPuddles, drawRain, drawWaterShimmer } from "./weather";
 import type { Weather } from "./weather";
 import { drawStreetLife } from "./streetlife";
-import { drawDayNightArc } from "./atmosphere";
 
 export type Lens = "none" | "mood" | "safety" | "green";
 
@@ -333,10 +332,6 @@ export class CityRenderer {
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * this.cam.x, dpr * this.cam.y);
 
     this.drawLabels(ctx, sim);
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawWeatherIcon(ctx, weather, w);
-    drawDayNightArc(ctx, hour, w);
   }
 
   private drawLens(ctx: CanvasRenderingContext2D, sim: Sim) {

@@ -130,28 +130,6 @@ export function drawWaterShimmer(
   }
 }
 
-const WEATHER_ICON: Record<Weather, string> = { clear: "☀️", cloudy: "☁️", rainy: "🌧️", foggy: "🌫️" };
-
-/**
- * A small weather symbol next to the day/night arc. Screen space. The lens-switch and City
- * Pulse DOM panels cover the full height of both edges of the canvas, so this sits in the
- * gap between them at the top-center instead.
- */
-export function drawWeatherIcon(ctx: CanvasRenderingContext2D, weather: Weather, w: number) {
-  const cx = w / 2 - 26;
-  const cy = 38;
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, 17, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(15,20,32,0.45)";
-  ctx.fill();
-  ctx.font = "18px 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(WEATHER_ICON[weather], cx, cy + 1);
-  ctx.restore();
-}
-
 /** Rain puddle glints on paved tiles — camera space, only while it's raining. */
 export function drawPuddles(
   ctx: CanvasRenderingContext2D,

@@ -16,6 +16,7 @@ const FIXED: Record<string, string> = {
   bridge: "#6f747e",
   rail: "#8a8176",
   runway: "#4a4e56",
+  pier: "#a9835a",
 };
 
 function grassColor(env: number, district: string, n: number, kind: string): string {
@@ -99,6 +100,11 @@ function decorate(ctx: CanvasRenderingContext2D, world: World, x: number, y: num
     }
     line(ctx, iso(x, y + 0.32), iso(x + 1, y + 0.32), "#c9ccd2", 1.4);
     line(ctx, iso(x, y + 0.68), iso(x + 1, y + 0.68), "#c9ccd2", 1.4);
+  } else if (t === "pier") {
+    // Wooden deck boards running along the pier, with posts at the corners.
+    for (let k = 1; k < 5; k++) line(ctx, iso(x, y + k * 0.2), iso(x + 1, y + k * 0.2), "rgba(70,45,25,0.35)", 0.8);
+    line(ctx, iso(x, y), iso(x, y + 1), "#6b4a2f", 1.6);
+    line(ctx, iso(x + 1, y), iso(x + 1, y + 1), "#6b4a2f", 1.6);
   } else if (t === "runway") {
     ctx.setLineDash([10, 8]);
     line(ctx, iso(x, y + 0.5), iso(x + 1, y + 0.5), "rgba(255,255,255,0.85)", 2);

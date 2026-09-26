@@ -13,7 +13,7 @@
 import { Sim } from "../src/sim/engine.ts";
 import { COMBOS, RULES, ruleById } from "../src/sim/rules.ts";
 import type { RuleId, RuleTheme } from "../src/sim/types.ts";
-import { metroLoopPoints, metroBranchPoints } from "../src/sim/world.ts";
+import { MAIN, MARINA, MARINA_PIERS, idx, metroLoopPoints, metroBranchPoints, shipRoutePoints } from "../src/sim/world.ts";
 import { dayWeather } from "../src/render/weather.ts";
 
 // save.ts reads/writes `localStorage`, which only exists in a browser. Polyfill a minimal
@@ -203,6 +203,67 @@ section("Metro Loop geometry");
   sim.world.flags.add("airport");
   const branchWithAirport = metroBranchPoints(sim.world);
   check("branch extends once the airport exists", branchWithAirport.length > branch.length);
+}
+
+// ---------- Harbor: ship lane, Marina, moored boats ----------
+section("Harbor");
+{
+  const sim = new Sim(21, 10);
+  const w = sim.world;
+  const tileAt = (x: number, y: number) => w.tiles[idx(Math.floor(x), Math.floor(y))];
+  // Walk the whole lane in small steps, checking the hull's width either side too.
+  const route = shipRoutePoints();
+  let offWater = "";
+  for (let i = 1; i < route.length && !offWater; i++) {
+    const a = route[i - 1];
+    const b = route[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    for (let t = 0; t <= len && !offWater; t += 0.1) {
+      const x = a.x + ((b.x - a.x) * t) / len;
+      const y = a.y + ((b.y - a.y) * t) / len;
+      for (const o of [-0.4, 0, 0.4]) {
+        const k = tileAt(x + nx * o, y + ny * o);
+        if (k !== "water") offWater = `(${(x + nx * o).toFixed(1)},${(y + ny * o).toFixed(1)}) is ${k}`;
+      }
+    }
+  }
+  check("ship lane stays on open water the whole way round", !offWater, offWater);
+  check("ship lane is a closed loop", route[0].x === route[route.length - 1].x && route[0].y === route[route.length - 1].y);
+  check("Marina is built from day one", w.flags.has("marina"));
+  check(
+    "Marina has its lighthouse",
+    w.buildings.some((b) => b.kind === "lighthouse"),
+  );
+  // The causeway: an unbroken walkable run from the mainland's sand corner onto the pad.
+  const causeway = [tileAt(MAIN - 3, MAIN - 3), tileAt(MAIN - 2, MAIN - 3), tileAt(MARINA.x0, MAIN - 3)];
+  check("causeway connects the mainland to the Marina", causeway.every((k) => k !== "water"), causeway.join(" → "));
+  check(
+    "every pier tile is pier",
+    MARINA_PIERS.every((px) => [1, 2, 3, 4].every((dy) => tileAt(px, MARINA.y1 + dy) === "pier")),
+  );
+  const boats = w.props.filter((p) => p.kind === "sailboat");
+  check("boats are moored at the Marina", boats.length >= 4, `${boats.length}`);
+  check("every moored boat floats on water", boats.every((p) => tileAt(p.x, p.y) === "water"));
+  const shipyardX = MAIN - 22;
+  check("Marina doesn't overlap the shipyard", MARINA.x0 > shipyardX + 6);
+}
+
+// ---------- Adventure Cove rides ----------
+section("Adventure Cove");
+{
+  const sim = new Sim(22, 10);
+  const w = sim.world;
+  const kinds = (k: string) => w.props.filter((p) => p.kind === k);
+  check("the park has tents", kinds("tent").length >= 3, `${kinds("tent").length}`);
+  check("the park has a mini train", kinds("minitrain").length === 1);
+  check("the park has a ferris wheel, coasters and carousels", kinds("ferriswheel").length === 1 && kinds("coaster").length === 2 && kinds("carousel").length === 2);
+  const inPark = (x: number, y: number) => x >= 3 && x <= 27 && y >= MAIN - 1 && y <= MAIN + 10;
+  const mt = kinds("minitrain")[0];
+  check("the mini train's loop fits inside the park", !!mt && inPark(mt.x, mt.y) && inPark(mt.x + 4, mt.y + 4));
+  const coasters = kinds("coaster");
+  check("coaster circuits fit inside the park", coasters.every((c) => inPark(c.x, c.y) && inPark(c.x + 4, c.y + 3)));
 }
 
 // ---------- Rule combos reference real rules ----------

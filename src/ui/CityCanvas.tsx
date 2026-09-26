@@ -37,7 +37,7 @@ export function CityCanvas({ sim, renderer, speedRef, selected, onPick, interact
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
       last = now;
       const speed = speedRef.current ?? 1;
       if (speed > 0) sim.update(dt * speed * HOURS_PER_SECOND);

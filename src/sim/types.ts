@@ -62,7 +62,8 @@ export type TileKind =
   | "pond"
   | "bridge"
   | "rail"
-  | "runway";
+  | "runway"
+  | "pier";
 
 export type BuildingKind =
   | "house"
@@ -97,7 +98,8 @@ export type BuildingKind =
   | "stadium"
   | "theatre"
   | "skyscraper"
-  | "themepark";
+  | "themepark"
+  | "lighthouse";
 
 export type AgeBand = "youth" | "adult" | "elder";
 export type Accessory = "none" | "backpack" | "badge" | "helmet" | "coat" | "vest";
@@ -416,7 +418,10 @@ export interface Prop {
     | "tower"
     | "ferriswheel"
     | "carousel"
-    | "coaster";
+    | "coaster"
+    | "tent"
+    | "minitrain"
+    | "sailboat";
   x: number;
   y: number;
   variant: number;

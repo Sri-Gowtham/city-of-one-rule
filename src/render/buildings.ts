@@ -39,6 +39,7 @@ const FLOOR_H: Partial<Record<BuildingKind, number>> = {
   theatre: 16,
   skyscraper: 13,
   themepark: 12,
+  lighthouse: 16,
 };
 
 const MATERIAL: Record<BuildingKind, Material> = {
@@ -75,6 +76,7 @@ const MATERIAL: Record<BuildingKind, Material> = {
   theatre: "stone",
   skyscraper: "glass",
   themepark: "siding",
+  lighthouse: "stone",
 };
 
 const EMBLEM: Partial<Record<BuildingKind, string>> = {
@@ -222,6 +224,10 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
   ];
   if (b.construction < 1) {
     drawConstruction(ctx, b, H);
+    return;
+  }
+  if (kind === "lighthouse") {
+    drawLighthouse(ctx, b, H, bc);
     return;
   }
   const closed = b.closed;
@@ -1146,6 +1152,100 @@ export function drawBuilding(ctx: CanvasRenderingContext2D, b: Building, bc: Bui
       ctx.fill();
     }
   }
+}
+
+/**
+ * A tapered red-and-white striped tower with a gallery and glazed lantern room. Drawn as a
+ * round tower rather than the generic box every other building starts from, so it reads as
+ * a lighthouse at a glance even at the zoomed-out default view.
+ */
+function drawLighthouse(ctx: CanvasRenderingContext2D, b: Building, H: number, bc: BuildCtx) {
+  const c0 = iso(b.x + 0.5, b.y + 0.5, 0);
+  const rb = 13;
+  const rt = 8;
+  const at = (z: number): { cx: number; cy: number; r: number } => {
+    const t = z / H;
+    return { cx: c0[0], cy: c0[1] - z, r: rb + (rt - rb) * t };
+  };
+
+  // Rocky base and contact shadow.
+  ctx.fillStyle = "rgba(15,25,20,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(c0[0] + 8, c0[1] + 3, rb + 10, (rb + 10) * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#8d8a82";
+  ctx.beginPath();
+  ctx.ellipse(c0[0], c0[1], rb + 6, (rb + 6) * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Striped tapered body, drawn as stacked bands.
+  const bands = 6;
+  for (let k = 0; k < bands; k++) {
+    const lo = at((H * k) / bands);
+    const hi = at((H * (k + 1)) / bands);
+    const color = k % 2 ? "#d8433b" : "#f4f1ea";
+    ctx.beginPath();
+    ctx.moveTo(lo.cx - lo.r, lo.cy);
+    ctx.ellipse(lo.cx, lo.cy, lo.r, lo.r * 0.5, 0, Math.PI, 0, true);
+    ctx.lineTo(hi.cx + hi.r, hi.cy);
+    ctx.ellipse(hi.cx, hi.cy, hi.r, hi.r * 0.5, 0, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  // Round-body shading: light from the left, shadow on the right.
+  const g = ctx.createLinearGradient(c0[0] - rb, 0, c0[0] + rb, 0);
+  g.addColorStop(0, "rgba(255,255,255,0.18)");
+  g.addColorStop(0.45, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.32)");
+  const top = at(H);
+  ctx.beginPath();
+  ctx.moveTo(c0[0] - rb, c0[1]);
+  ctx.lineTo(top.cx - top.r, top.cy);
+  ctx.lineTo(top.cx + top.r, top.cy);
+  ctx.lineTo(c0[0] + rb, c0[1]);
+  ctx.ellipse(c0[0], c0[1], rb, rb * 0.5, 0, 0, Math.PI);
+  ctx.fillStyle = g;
+  ctx.fill();
+  // A door and two small windows.
+  ctx.fillStyle = "#3b2f25";
+  ctx.fillRect(c0[0] - 3, c0[1] - 9 + rb * 0.4, 6, 9);
+  ctx.fillStyle = "#2b3440";
+  ctx.fillRect(c0[0] - 1.5, c0[1] - H * 0.5, 3, 5);
+  ctx.fillRect(c0[0] - 1.5, c0[1] - H * 0.78, 3, 5);
+
+  // Gallery (walkway ring with railing).
+  ctx.fillStyle = "#2f3540";
+  ctx.beginPath();
+  ctx.ellipse(top.cx, top.cy, top.r + 5, (top.r + 5) * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#1c2027";
+  ctx.lineWidth = 1;
+  for (let k = -3; k <= 3; k++) {
+    const px = top.cx + (k / 3) * (top.r + 4);
+    ctx.beginPath();
+    ctx.moveTo(px, top.cy);
+    ctx.lineTo(px, top.cy - 5);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.ellipse(top.cx, top.cy - 5, top.r + 5, (top.r + 5) * 0.5, 0, 0, Math.PI);
+  ctx.stroke();
+
+  // Glazed lantern room and red dome.
+  const lz = top.cy - 5;
+  ctx.fillStyle = "#ffe38a";
+  ctx.fillRect(top.cx - 6, lz - 12, 12, 12);
+  ctx.strokeStyle = "#2f3540";
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(top.cx - 6, lz - 12, 12, 12);
+  line(ctx, [top.cx, lz - 12], [top.cx, lz], "#2f3540", 1);
+  ctx.fillStyle = "#b5362f";
+  ctx.beginPath();
+  ctx.ellipse(top.cx, lz - 12, 8, 7, 0, Math.PI, 0);
+  ctx.fill();
+  line(ctx, [top.cx, lz - 19], [top.cx, lz - 25], "#2f3540", 1.2);
+  bc.lamps.push([top.cx, lz - 6]);
 }
 
 function drawConstruction(ctx: CanvasRenderingContext2D, b: Building, fullH: number) {

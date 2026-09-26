@@ -194,6 +194,7 @@ const FLOORS: Record<BuildingKind, [number, number]> = {
   theatre: [2, 2],
   skyscraper: [16, 24],
   themepark: [1, 1],
+  lighthouse: [4, 4],
 };
 
 const WALLS: Partial<Record<BuildingKind, string[]>> = {
@@ -241,6 +242,7 @@ const BASE_COLORS: Record<BuildingKind, [string, string, string]> = {
   theatre: ["#7a3b52", "#3c1d2c", "#d9b44a"],
   skyscraper: ["#a9d8e0", "#3a5a68", "#eafcff"],
   themepark: ["#ff8fb1", "#c94f77", "#ffe066"],
+  lighthouse: ["#f4f1ea", "#d8433b", "#ffe38a"],
 };
 
 const BLOCKED: ReadonlySet<TileKind> = new Set<TileKind>(["water", "pond"]);
@@ -804,11 +806,32 @@ export function buildThemePark(world: World, rng: Rng, era: number): Building[] 
   built.push(gate);
   set(midX - 1, Y0 + 1, "plaza");
   set(midX, Y0 + 1, "plaza");
+  // Ride footprints (tile rectangles) kept clear of the random trees scattered below.
+  const reserved: [number, number, number, number][] = [];
+  const reserve = (rx: number, ry: number, rw: number, rh: number) => reserved.push([rx, ry, rx + rw, ry + rh]);
+  const isReserved = (tx: number, ty: number) => reserved.some(([a, b, c, d]) => tx >= a && tx <= c && ty >= b && ty <= d);
+
   world.props.push({ kind: "ferriswheel", x: midX + 5, y: Y0 + 3, variant: 0 });
-  world.props.push({ kind: "coaster", x: midX - 9, y: Y0 + 2, variant: 0 });
-  world.props.push({ kind: "coaster", x: midX + 6, y: Y0 + 8, variant: 1 });
-  world.props.push({ kind: "carousel", x: midX - 8, y: Y0 + 7, variant: 0 });
-  world.props.push({ kind: "carousel", x: midX + 2, y: Y0 + 9, variant: 1 });
+  reserve(midX + 3, Y0 + 1, 4, 3);
+  world.props.push({ kind: "coaster", x: X0 + 2, y: Y0 + 1, variant: 0 });
+  reserve(X0 + 2, Y0 + 1, 4, 3);
+  world.props.push({ kind: "coaster", x: midX + 6, y: Y0 + 7, variant: 1 });
+  reserve(midX + 6, Y0 + 7, 4, 3);
+  world.props.push({ kind: "carousel", x: X0 + 4, y: Y0 + 8, variant: 0 });
+  reserve(X0 + 3, Y0 + 7, 2, 2);
+  world.props.push({ kind: "carousel", x: midX + 3, y: Y0 + 9, variant: 1 });
+  reserve(midX + 2, Y0 + 8, 2, 2);
+  world.props.push({ kind: "minitrain", x: X0 + 6, y: Y0 + 6, variant: 0 });
+  reserve(X0 + 6, Y0 + 6, 4, 4);
+  for (const [tx, ty, v] of [
+    [X0 + 8, Y0 + 2, 0],
+    [X1 - 3, Y0 + 2, 1],
+    [X0 + 1, Y1 - 1, 2],
+    [midX + 2, Y0 + 6, 3],
+  ]) {
+    world.props.push({ kind: "tent", x: tx, y: ty, variant: v });
+    reserve(tx, ty, 1, 1);
+  }
   world.props.push({ kind: "fountain", x: midX, y: Y0 + 5, variant: 0 });
   const stalls: [number, number][] = [
     [midX - 4, Y0 + 1],
@@ -818,16 +841,16 @@ export function buildThemePark(world: World, rng: Rng, era: number): Building[] 
   ];
   for (const [sx, sy] of stalls) built.push(addBuilding(world, rng, "kiosk", sx, sy, 1, 1, "park", "", era));
   for (const [bx, by] of [
-    [midX - 6, Y0 + 4],
-    [midX + 8, Y0 + 2],
-    [midX - 2, Y0 + 9],
+    [midX - 2, Y0 + 3],
+    [midX + 8, Y0 + 4],
+    [midX - 1, Y1 - 1],
     [midX + 6, Y0 + 5],
   ])
     world.props.push({ kind: "bench", x: bx, y: by, variant: bx % 2 });
-  for (let k = 0; k < 24; k++) {
+  for (let k = 0; k < 30; k++) {
     const tx = X0 + 1 + Math.floor(rng.range(0, X1 - X0 - 1));
     const ty = Y0 + 1 + Math.floor(rng.range(0, Y1 - Y0 - 1));
-    if (world.tiles[idx(tx, ty)] === "garden" && rng.chance(0.6)) addTree(world, rng, tx, ty, era * 24, true);
+    if (world.tiles[idx(tx, ty)] === "garden" && !isReserved(tx, ty) && rng.chance(0.6)) addTree(world, rng, tx, ty, era * 24, true);
   }
   for (const b of built) b.door = findDoor(world, b);
   for (let y = Y0; y <= Y1; y++)
@@ -957,4 +980,93 @@ export function buildAirport(world: World, rng: Rng, era: number): Building {
   world.flags.add("airport");
   world.groundVersion++;
   return t;
+}
+
+/**
+ * Harborfront Marina: a small reclaimed pad in the open water south of Harborview's tip,
+ * joined to the mainland's south-east corner by a short causeway. It fills what was the
+ * biggest empty stretch of water on the map, and gives the harbor's ships somewhere to be
+ * going. Built on day one alongside Adventure Cove (same reasoning: it's scenery the city
+ * always had, not something the player's rules cause).
+ */
+export const MARINA = { x0: 46, x1: 54, y0: 42, y1: 48 };
+export const MARINA_PIERS = [47, 50, 53];
+
+export function buildMarina(world: World, rng: Rng, era: number): Building[] {
+  const built: Building[] = [];
+  const { x0, x1, y0, y1 } = MARINA;
+  const set = (x: number, y: number, t: TileKind) => (world.tiles[idx(x, y)] = t);
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const i = idx(x, y);
+      if (world.treeAt.has(i)) world.treeAt.delete(i);
+      const edge = x === x0 || x === x1 || y === y0 || y === y1;
+      set(x, y, edge ? "sand" : "grass");
+      world.district[i] = "coast";
+    }
+  }
+  world.trees = world.trees.filter((t) => world.treeAt.has(idx(t.x, t.y)));
+  // Causeway from the mainland's sand corner, and a promenade running along the pad.
+  set(MAIN - 2, MAIN - 4, "walk");
+  set(MAIN - 2, MAIN - 3, "walk");
+  for (let x = x0; x < x1; x++) set(x, MAIN - 3, "walk");
+  // Finger piers reaching south into open water.
+  for (const px of MARINA_PIERS) for (let y = y1 + 1; y <= y1 + 4; y++) set(px, y, "pier");
+
+  const light = addBuilding(world, rng, "lighthouse", x1 - 1, y1 - 2, 1, 1, "coast", "Harborfront Light", era);
+  built.push(light);
+  built.push(addBuilding(world, rng, "restaurant", x0 + 2, y1 - 2, 1, 1, "coast", "The Anchor", era));
+  built.push(addBuilding(world, rng, "kiosk", x0 + 5, y1 - 2, 1, 1, "coast", "Pier Snacks", era));
+  for (const [bx, by] of [
+    [x0 + 1, y1 - 1],
+    [x0 + 4, y0 + 1],
+    [x0 + 6, y1 - 1],
+  ])
+    world.props.push({ kind: "bench", x: bx, y: by, variant: 1 });
+  for (const lx of [x0, x0 + 4, x1 - 1]) world.props.push({ kind: "streetlight", x: lx, y: y0 + 1, variant: 0 });
+  // Boats moored alongside the piers.
+  const moorings: [number, number][] = [
+    [MARINA_PIERS[0] + 1, y1 + 2],
+    [MARINA_PIERS[0] - 1, y1 + 3],
+    [MARINA_PIERS[1] - 1, y1 + 1],
+    [MARINA_PIERS[1] + 1, y1 + 3],
+    [MARINA_PIERS[2] - 1, y1 + 2],
+    [MARINA_PIERS[2] + 1, y1 + 4],
+  ];
+  moorings.forEach(([mx, my], k) => world.props.push({ kind: "sailboat", x: mx, y: my, variant: k }));
+  for (let k = 0; k < 8; k++) {
+    const tx = x0 + 1 + Math.floor(rng.range(0, x1 - x0 - 1));
+    const ty = y0 + 1 + Math.floor(rng.range(0, y1 - y0 - 1));
+    if (world.tiles[idx(tx, ty)] === "grass" && world.occupied[idx(tx, ty)] === -1 && rng.chance(0.6)) addTree(world, rng, tx, ty, era * 24, true);
+  }
+  for (const b of built) b.door = findDoor(world, b);
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const i = idx(x, y);
+      if ((world.tiles[i] === "grass" || world.tiles[i] === "sand") && world.occupied[i] === -1) world.outdoorSpots.push({ x, y });
+    }
+  world.flags.add("marina");
+  world.groundVersion++;
+  return built;
+}
+
+/**
+ * The harbor's shipping lane, in tile coordinates: a closed loop through open water that
+ * passes the shipyard, swings round the Marina's piers and out to sea. Every point along it
+ * is on "water" (checked by scripts/check.ts), so ships never sail across land.
+ */
+export function shipRoutePoints(): { x: number; y: number }[] {
+  return [
+    { x: 31.5, y: 50.5 },
+    { x: 41, y: 48 },
+    { x: 44.5, y: 49.5 },
+    { x: 44.5, y: 55.5 },
+    { x: 55, y: 56 },
+    { x: 57.5, y: 50 },
+    { x: 57.5, y: 43.5 },
+    { x: 59.5, y: 42 },
+    { x: 59.5, y: 58.5 },
+    { x: 36, y: 59 },
+    { x: 31.5, y: 50.5 },
+  ];
 }

@@ -41,6 +41,10 @@ import { drawSky } from "./atmosphere";
 import { dayWeather, drawClouds, drawFog, drawPuddles, drawRain, drawWaterShimmer } from "./weather";
 import type { Weather } from "./weather";
 import { drawStreetLife } from "./streetlife";
+import { arcPath, pointAt } from "./path";
+import { drawCarousel, drawCoaster, drawFerrisWheel, drawMiniTrain, drawMooredBoat, drawShips, drawTent } from "./attractions";
+import type { Glow } from "./attractions";
+import type { ArcPath } from "./path";
 
 export type Lens = "none" | "mood" | "safety" | "green";
 
@@ -124,7 +128,7 @@ export class CityRenderer {
   private sprites = new Map<number, Sprite>();
   private labels: { x: number; y: number; text: string }[] | null = null;
   private metroKey = "";
-  private metroPath: { pts: Pt[]; cum: number[]; total: number } | null = null;
+  private metroPath: ArcPath | null = null;
   private lastLevel = new Map<number, number>();
   private levelFlash = new Map<number, number>();
   private lastEra = -1;
@@ -296,6 +300,7 @@ export class CityRenderer {
     list.sort((a, b) => a.d - b.d);
     for (const it of list) it.f();
     if (world.flags.has("rail")) this.drawMetroLoop(ctx, sim, speed, night);
+    if (world.flags.has("marina")) drawShips(ctx, this.time, speed, night, (x, y, r, color) => bc.glows.push({ x, y, r, color }));
 
     if (weather === "rainy") {
       // Wet-darkened building faces: a translucent cool wash over each visible silhouette.
@@ -478,7 +483,7 @@ export class CityRenderer {
 
   /** Builds (and caches) the elevated Metro Loop's full path: the ring road, with a
    *  spur to Harborview — and on to the airport — spliced in where it meets the bridge. */
-  private buildMetroPath(sim: Sim): { pts: Pt[]; cum: number[]; total: number } {
+  private buildMetroPath(sim: Sim): ArcPath {
     const key = `${+sim.world.flags.has("bridge")}${+sim.world.flags.has("airport")}`;
     if (this.metroPath && this.metroKey === key) return this.metroPath;
     this.metroKey = key;
@@ -490,23 +495,8 @@ export class CityRenderer {
       for (let i = branch.length - 2; i >= 0; i--) wp.push(branch[i]);
     }
     wp.push({ x: ring[1].x, y: ring[2].y }, ring[2], ring[3], ring[4]);
-    const pts = wp.map((p) => iso(p.x, p.y, 0) as Pt);
-    const cum = [0];
-    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-    this.metroPath = { pts, cum, total: cum[cum.length - 1] };
+    this.metroPath = arcPath(wp.map((p) => iso(p.x, p.y, 0) as Pt));
     return this.metroPath;
-  }
-
-  private metroPointAt(path: { pts: Pt[]; cum: number[]; total: number }, d: number): Pt {
-    const target = ((d % path.total) + path.total) % path.total;
-    let i = 1;
-    while (i < path.cum.length && path.cum[i] < target) i++;
-    i = Math.min(i, path.cum.length - 1);
-    const segLen = path.cum[i] - path.cum[i - 1] || 1;
-    const t = (target - path.cum[i - 1]) / segLen;
-    const [x0, y0] = path.pts[i - 1];
-    const [x1, y1] = path.pts[i];
-    return [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
   }
 
   private drawMetroLoop(ctx: CanvasRenderingContext2D, sim: Sim, speed: number, night: number) {
@@ -537,7 +527,7 @@ export class CityRenderer {
 
     // Stations at the harbor / airport spur tip (ring stations are placed as ordinary props).
     if (sim.world.flags.has("bridge")) {
-      const tip = up(this.metroPointAt(path, path.total * 0.5));
+      const tip = up(pointAt(path, path.total * 0.5));
       ctx.font = "700 9px 'Inter', sans-serif";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
@@ -559,7 +549,7 @@ export class CityRenderer {
     const trainGap = path.total / 3;
     for (let tr = 0; tr < 3; tr++) {
       const head = v + tr * trainGap;
-      for (let k = 0; k < 3; k++) this.drawMetroCar(ctx, up(this.metroPointAt(path, head - k * 13)), k === 0, night);
+      for (let k = 0; k < 3; k++) this.drawMetroCar(ctx, up(pointAt(path, head - k * 13)), k === 0, night);
     }
   }
 
@@ -820,6 +810,7 @@ export class CityRenderer {
   }
 
   private drawProp(ctx: CanvasRenderingContext2D, p: Prop, sim: Sim, bc: BuildCtx) {
+    const glow: Glow = (x, y, r, color) => bc.glows.push({ x, y, r, color });
     switch (p.kind) {
       case "streetlight": {
         const base = iso(p.x + 0.15, p.y + 0.15);
@@ -979,69 +970,24 @@ export class CityRenderer {
         ctx.fillRect(base[0] - 1.5, base[1] - 64, 3, 3);
         break;
       }
-      case "ferriswheel": {
-        const c = iso(p.x + 0.5, p.y + 0.5, 34);
-        const r = 30;
-        line(ctx, [c[0], c[1] - r - 12], [c[0], c[1] + 8], "#7a7f87", 2);
-        line(ctx, [c[0] - 14, c[1] + 8], [c[0] + 14, c[1] + 8], "#7a7f87", 3);
-        ctx.strokeStyle = "#c9ced4";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.ellipse(c[0], c[1] - r, r, r * 0.62, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        const spin = this.time * 0.4;
-        const cabinColors = ["#e0463a", "#3d6fb6", "#f2c14e", "#3fa06a", "#8a5a9a", "#e07b39"];
-        for (let k = 0; k < 8; k++) {
-          const a = spin + (k / 8) * Math.PI * 2;
-          const cx = c[0] + Math.cos(a) * r;
-          const cy = c[1] - r + Math.sin(a) * r * 0.62;
-          line(ctx, [c[0], c[1] - r], [cx, cy], "rgba(150,150,150,0.5)", 1);
-          ctx.fillStyle = cabinColors[k % cabinColors.length];
-          ctx.fillRect(cx - 2.4, cy - 2.4, 4.8, 4.8);
-        }
+      case "ferriswheel":
+        drawFerrisWheel(ctx, p, this.time, bc.night, glow);
         break;
-      }
-      case "carousel": {
-        const c = iso(p.x + 0.5, p.y + 0.5, 0);
-        box(ctx, p.x + 0.15, p.y + 0.15, 0.7, 0.7, 0, 3, "#e9e4d8");
-        const top = iso(p.x + 0.5, p.y + 0.5, 20);
-        for (let k = 0; k < 8; k++) {
-          const a0 = (k / 8) * Math.PI * 2;
-          const a1 = ((k + 1) / 8) * Math.PI * 2;
-          poly(
-            ctx,
-            [top, [top[0] + Math.cos(a0) * 22, top[1] + Math.sin(a0) * 11], [top[0] + Math.cos(a1) * 22, top[1] + Math.sin(a1) * 11]],
-            k % 2 ? "#ff8fb1" : "#ffe066",
-          );
-        }
-        const spin = this.time * 0.9;
-        for (let k = 0; k < 6; k++) {
-          const a = spin + (k / 6) * Math.PI * 2;
-          const hx = c[0] + Math.cos(a) * 14;
-          const hy = c[1] + Math.sin(a) * 7 - 3;
-          line(ctx, [hx, hy - 10], [hx, hy], "#c9a33a", 1.2);
-          ctx.fillStyle = ["#e0463a", "#3d6fb6", "#3fa06a"][k % 3];
-          ctx.beginPath();
-          ctx.ellipse(hx, hy, 3, 2, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      case "carousel":
+        drawCarousel(ctx, p, this.time, bc.night, glow);
         break;
-      }
-      case "coaster": {
-        const base = iso(p.x, p.y + 1);
-        ctx.strokeStyle = "#d8433b";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(base[0] - 20, base[1]);
-        ctx.bezierCurveTo(base[0] - 10, base[1] - 46, base[0] + 10, base[1] - 46, base[0] + 8, base[1] - 8);
-        ctx.bezierCurveTo(base[0] + 4, base[1] + 4, base[0] + 24, base[1] - 4, base[0] + 30, base[1] - 20);
-        ctx.stroke();
-        for (let k = 0; k < 5; k++) {
-          const bx = base[0] - 20 + k * 12;
-          line(ctx, [bx, base[1]], [bx, base[1] + 6], "#8a5a35", 2);
-        }
+      case "coaster":
+        drawCoaster(ctx, p, this.time);
         break;
-      }
+      case "tent":
+        drawTent(ctx, p, bc.night, glow);
+        break;
+      case "minitrain":
+        drawMiniTrain(ctx, p, this.time, bc.night);
+        break;
+      case "sailboat":
+        drawMooredBoat(ctx, p, this.time, bc.night);
+        break;
       case "hydrant": {
         const base = iso(p.x + 0.5, p.y + 0.5);
         ctx.fillStyle = "#c0392b";

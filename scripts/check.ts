@@ -16,6 +16,21 @@ import type { RuleId, RuleTheme } from "../src/sim/types.ts";
 import { metroLoopPoints, metroBranchPoints } from "../src/sim/world.ts";
 import { dayWeather } from "../src/render/weather.ts";
 
+// save.ts reads/writes `localStorage`, which only exists in a browser. Polyfill a minimal
+// in-memory version so the save/load round-trip check below can exercise the real code path.
+const memoryStore = new Map<string, string>();
+(globalThis as unknown as { localStorage: Storage }).localStorage = {
+  getItem: (k: string) => memoryStore.get(k) ?? null,
+  setItem: (k: string, v: string) => void memoryStore.set(k, v),
+  removeItem: (k: string) => void memoryStore.delete(k),
+  clear: () => memoryStore.clear(),
+  key: (i: number) => [...memoryStore.keys()][i] ?? null,
+  get length() {
+    return memoryStore.size;
+  },
+} as Storage;
+const { saveGame, loadGame } = await import("../src/sim/save.ts");
+
 let failures = 0;
 
 function check(name: string, cond: boolean, detail?: string) {
@@ -110,6 +125,55 @@ section("Determinism (same seed -> same outcome)");
   const a = run();
   const b = run();
   check("identical seed + choices reproduce identical metrics", a === b, `${a} vs ${b}`);
+}
+
+// ---------- Save/load round trip ----------
+section("Save/load round trip (Endless, seed 314)");
+{
+  const plan: RuleId[] = ["four-hour-day", "waste-tax", "no-advertising", "reward-citizen"];
+  const sim = new Sim(314, Infinity);
+  for (let d = 0; d < 6; d++) {
+    sim.startEra(sim.unlocked.has(plan[d % plan.length]) ? plan[d % plan.length] : sim.offered[0]);
+    while (sim.phase === "running") sim.update(1);
+    sim.continueAfterPaper();
+  }
+  // saveGame() only writes during "choosing" or "report" phase; continueAfterPaper() leaves
+  // us in "choosing" here, which is also the phase an in-progress game actually saves from.
+  saveGame(sim);
+  const restored = loadGame();
+  check("a save was written and reloaded", restored !== null);
+  if (restored) {
+    check("restored era matches", restored.era === sim.era, `${restored.era} vs ${sim.era}`);
+    check("restored citizen count matches", restored.citizens.length === sim.citizens.length);
+    check(
+      "restored metrics match exactly",
+      JSON.stringify(restored.metrics) === JSON.stringify(sim.metrics),
+      `${JSON.stringify(restored.metrics)} vs ${JSON.stringify(sim.metrics)}`,
+    );
+    check(
+      "restored culture matches exactly",
+      JSON.stringify(restored.culture) === JSON.stringify(sim.culture),
+    );
+    check("restored deck/offer state matches", JSON.stringify(restored.offered) === JSON.stringify(sim.offered));
+
+    // The real test: does the restored sim go on to behave identically to the original from
+    // here, not just look the same on the surface? Play both forward with the same choices.
+    for (let d = 0; d < 4; d++) {
+      const pick = (s: Sim) => (s.unlocked.has(plan[d % plan.length]) ? plan[d % plan.length] : s.offered[0]);
+      sim.startEra(pick(sim));
+      restored.startEra(pick(restored));
+      while (sim.phase === "running") sim.update(1);
+      while (restored.phase === "running") restored.update(1);
+      sim.continueAfterPaper();
+      restored.continueAfterPaper();
+    }
+    check(
+      "restored sim behaves identically going forward",
+      JSON.stringify(restored.metrics) === JSON.stringify(sim.metrics) &&
+        restored.citizens.length === sim.citizens.length,
+      `${JSON.stringify(restored.metrics)} vs ${JSON.stringify(sim.metrics)}`,
+    );
+  }
 }
 
 // ---------- Deterministic daily weather ----------

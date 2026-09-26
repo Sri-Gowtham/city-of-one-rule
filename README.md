@@ -4,9 +4,6 @@
 
 ### *Change one rule. Watch a city change itself.*
 
-[![Check](https://github.com/Sri-Gowtham/city-of-one-rule/actions/workflows/check.yml/badge.svg)](https://github.com/Sri-Gowtham/city-of-one-rule/actions/workflows/check.yml)
-[![Deploy](https://github.com/Sri-Gowtham/city-of-one-rule/actions/workflows/deploy.yml/badge.svg)](https://github.com/Sri-Gowtham/city-of-one-rule/actions/workflows/deploy.yml)
-
 **[▶ Play it now](https://sri-gowtham.github.io/city-of-one-rule/)**
 
 </div>

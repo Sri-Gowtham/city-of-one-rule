@@ -159,3 +159,41 @@ export function drawSky(ctx: CanvasRenderingContext2D, hour: number, w: number, 
   ctx.fillStyle = band;
   ctx.fillRect(0, horizonY - 40, w, 60);
 }
+
+/**
+ * A small 24h clock arc with a sun/moon dot marking the current hour. Screen space, drawn
+ * last so it always sits above the city. The lens-switch and City Pulse DOM panels cover the
+ * full height of both left and right edges of the canvas, so this sits in the gap between
+ * them at the top-center instead.
+ */
+export function drawDayNightArc(ctx: CanvasRenderingContext2D, hour: number, w: number) {
+  const cx = w / 2 + 26;
+  const cy = 38;
+  const r = 20;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI, 0);
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - r, cy);
+  ctx.lineTo(cx + r, cy);
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  const night = nightAmount(hour);
+  const t = ((hour + 6) % 24) / 24; // 0 at midnight-ish start of the arc, wraps through the day
+  const a = Math.PI + t * Math.PI * 2;
+  const dotX = cx + Math.cos(a) * r;
+  const dotY = cy + Math.sin(a) * r;
+  const onTop = dotY <= cy + 1;
+  ctx.globalAlpha = onTop ? 1 : 0.35;
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = night > 0.5 ? "#d6dcf2" : "#ffcf6b";
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}

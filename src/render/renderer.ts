@@ -38,8 +38,10 @@ function litProb(hour: number, home: boolean): number {
 import type { Pt } from "./draw";
 import { renderGround } from "./ground";
 import { drawSky } from "./atmosphere";
-import { dayWeather, drawClouds, drawFog, drawPuddles, drawRain, drawWaterShimmer } from "./weather";
+import { dayWeather, drawClouds, drawFog, drawPuddles, drawRain, drawWaterShimmer, drawWeatherIcon } from "./weather";
 import type { Weather } from "./weather";
+import { drawStreetLife } from "./streetlife";
+import { drawDayNightArc } from "./atmosphere";
 
 export type Lens = "none" | "mood" | "safety" | "green";
 
@@ -126,6 +128,8 @@ export class CityRenderer {
   private metroPath: { pts: Pt[]; cum: number[]; total: number } | null = null;
   private lastLevel = new Map<number, number>();
   private levelFlash = new Map<number, number>();
+  private lastEra = -1;
+  private ruleFxAt = -1;
 
   resize(w: number, h: number, dpr: number) {
     this.w = w;
@@ -205,6 +209,10 @@ export class CityRenderer {
     }
 
     const weather: Weather = dayWeather(sim.seed, sim.era);
+    if (sim.era !== this.lastEra) {
+      this.lastEra = sim.era;
+      this.ruleFxAt = this.time;
+    }
 
     // Where the city's far (south) edge actually sits on screen under the current camera —
     // the sky's horizon must track this, or the sun/moon set at a line that has nothing to do
@@ -243,6 +251,8 @@ export class CityRenderer {
     const tileY1 = Math.ceil(Math.max(...corners.map((p) => p[1]))) + 2;
     drawWaterShimmer(ctx, world, this.time, tileX0, tileY0, tileX1, tileY1);
     if (weather === "rainy") drawPuddles(ctx, world, this.time, tileX0, tileY0, tileX1, tileY1);
+    drawStreetLife(ctx, world, tileX0, tileY0, tileX1, tileY1, night > 0.3);
+    this.drawRuleEffectPulse(ctx, sim);
 
     for (const l of world.litter) {
       const p = iso(l.x + l.jx, l.y + l.jy);
@@ -323,6 +333,10 @@ export class CityRenderer {
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * this.cam.x, dpr * this.cam.y);
 
     this.drawLabels(ctx, sim);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawWeatherIcon(ctx, weather, w);
+    drawDayNightArc(ctx, hour, w);
   }
 
   private drawLens(ctx: CanvasRenderingContext2D, sim: Sim) {
@@ -355,17 +369,71 @@ export class CityRenderer {
         if (b >= 0) sum[b]++;
       }
     }
+    const values = new Array(BLOCKS * BLOCKS).fill(0.5);
     for (let b = 0; b < BLOCKS * BLOCKS; b++) {
-      let v: number;
       if (this.lens === "mood") {
         if (!n[b]) continue;
-        v = Math.max(0, Math.min(1, (sum[b] / n[b] - 35) / 45));
-      } else if (this.lens === "safety") v = Math.max(0, 1 - sum[b] / 4);
-      else v = Math.min(1, sum[b] / 12);
+        values[b] = Math.max(0, Math.min(1, (sum[b] / n[b] - 35) / 45));
+      } else if (this.lens === "safety") values[b] = Math.max(0, 1 - sum[b] / 4);
+      else values[b] = Math.min(1, sum[b] / 12);
+    }
+    // A soft, overlapping wash per block instead of a hard grid — buildings still read through
+    // it, and it blends smoothly into neighboring blocks rather than snapping at borders.
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    for (let b = 0; b < BLOCKS * BLOCKS; b++) {
+      const v = values[b];
       const hue = v * 120;
-      const x0 = 2 + (b % BLOCKS) * 6 - 0.5;
-      const y0 = 2 + Math.floor(b / BLOCKS) * 6 - 0.5;
-      poly(ctx, [iso(x0, y0), iso(x0 + 6, y0), iso(x0 + 6, y0 + 6), iso(x0, y0 + 6)], `hsla(${hue},80%,50%,0.38)`, "rgba(255,255,255,0.25)", 1);
+      const bx = b % BLOCKS;
+      const by = Math.floor(b / BLOCKS);
+      const cxw = 2 + bx * 6 + 2.5;
+      const cyw = 2 + by * 6 + 2.5;
+      const [cx, cy] = iso(cxw, cyw);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 150);
+      g.addColorStop(0, `hsla(${hue},78%,50%,0.34)`);
+      g.addColorStop(0.7, `hsla(${hue},78%,50%,0.22)`);
+      g.addColorStop(1, `hsla(${hue},78%,50%,0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 150, 150 * (TH / TW), 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // A small icon per block reinforcing the reading: shield/crack for safety, leaf for greenery.
+      const iconPt = iso(cxw, cyw, 8);
+      ctx.font = "12px 'Segoe UI Emoji', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (this.lens === "safety") {
+        ctx.globalAlpha = 0.85;
+        ctx.fillText(v > 0.62 ? "🛡️" : v < 0.3 ? "⚠️" : "", iconPt[0], iconPt[1]);
+        ctx.globalAlpha = 1;
+      } else if (this.lens === "green" && v > 0.35) {
+        ctx.globalAlpha = 0.85;
+        ctx.fillText("🍃", iconPt[0], iconPt[1]);
+        ctx.globalAlpha = 1;
+      }
+      ctx.textBaseline = "alphabetic";
+    }
+    ctx.restore();
+  }
+
+  /** A brief expanding ring from City Hall's plaza the moment a new rule takes effect. */
+  private drawRuleEffectPulse(ctx: CanvasRenderingContext2D, sim: Sim) {
+    if (this.ruleFxAt < 0) return;
+    const age = this.time - this.ruleFxAt;
+    if (age > 1.5) return;
+    const t = age / 1.5;
+    const p = sim.world.plazaSpot;
+    const c = iso(p.x + 0.5, p.y + 0.5);
+    for (const ring of [0, 0.35]) {
+      const rt = Math.max(0, t - ring);
+      if (rt <= 0 || rt > 1) continue;
+      const r = 16 + rt * 150;
+      ctx.beginPath();
+      ctx.ellipse(c[0], c[1], r, r * (TH / TW), 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,216,74,${(1 - rt) * 0.5})`;
+      ctx.lineWidth = 3 - rt * 2;
+      ctx.stroke();
     }
   }
 
